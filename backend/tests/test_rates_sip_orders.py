@@ -56,6 +56,23 @@ class TestRates:
 
 # -------- SIP plans / enroll / pay --------
 class TestSip:
+    def _login(self, phone=None):
+        phone = phone or f"9{uuid.uuid4().int % 10**9:09d}"
+        h = _h(AURELIA_HOST)
+        assert requests.post(f"{BASE_URL}/api/public/auth/otp/request", headers=h, json={"phone": phone}, timeout=15).status_code == 200
+        code = os.environ.get("OTP_DEV_CODE", "123456")
+        r = requests.post(
+            f"{BASE_URL}/api/public/auth/otp/verify",
+            headers=h,
+            json={"phone": phone, "code": code},
+            timeout=15,
+        )
+        assert r.status_code == 200, r.text
+        return r.json()["access_token"], phone
+
+    def _ah(self, token):
+        return {**_h(AURELIA_HOST), "Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+
     def test_plans_seeded(self):
         r = requests.get(f"{BASE_URL}/api/public/sip/plans", headers=_h(AURELIA_HOST), timeout=15)
         assert r.status_code == 200
@@ -68,11 +85,11 @@ class TestSip:
         assert p11["metal"] == "gold"
 
     def test_enroll_creates_11_installments(self):
-        guest_id = f"TEST_guest_{uuid.uuid4().hex[:8]}"
+        token, phone = self._login()
         r = requests.post(
             f"{BASE_URL}/api/public/sip/enroll",
-            headers=_h(AURELIA_HOST),
-            json={"guest_id": guest_id, "plan_id": "gold-11-1", "name": "TEST User", "phone": "9999999999"},
+            headers=self._ah(token),
+            json={"plan_id": "gold-11-1", "name": "TEST User", "phone": phone, "preferred_day": 15},
             timeout=15,
         )
         assert r.status_code == 200, r.text
@@ -80,16 +97,20 @@ class TestSip:
         assert e["plan_id"] == "gold-11-1"
         assert e["tenure_months"] == 11
         assert e["metal"] == "gold"
+        assert e["preferred_day"] == 15
         assert len(e["installments"]) == 11
         assert e["installments"][0]["status"] == "due"
         for inst in e["installments"][1:]:
             assert inst["status"] == "upcoming"
+            # later installments land on preferred day (UTC calendar)
+            from datetime import datetime
 
-        # GET should reveal it in the guest's list with summary
+            due = datetime.fromisoformat(inst["due_date"].replace("Z", "+00:00"))
+            assert due.day == 15
+
         lst = requests.get(
             f"{BASE_URL}/api/public/sip/enrollments",
-            headers=_h(AURELIA_HOST),
-            params={"guest_id": guest_id},
+            headers=self._ah(token),
             timeout=15,
         ).json()
         assert len(lst) == 1
@@ -98,27 +119,77 @@ class TestSip:
         assert lst[0]["summary"]["paid_installments"] == 0
         assert lst[0]["summary"]["current_rate"] is not None
 
+    def test_metal_one_time_buy_credits_wallet(self):
+        token, phone = self._login()
+        buy = requests.post(
+            f"{BASE_URL}/api/public/metal/buy",
+            headers=self._ah(token),
+            json={"metal": "gold", "amount_inr": 2000},
+            timeout=15,
+        )
+        assert buy.status_code == 200, buy.text
+        body = buy.json()
+        assert body.get("purchase_id")
+        assert body.get("razorpay_order_id")
+        assert body.get("estimated_grams", 0) > 0
+        conf = requests.post(
+            f"{BASE_URL}/api/public/metal/buy/dev-confirm",
+            headers=self._ah(token),
+            json={"purchase_id": body["purchase_id"]},
+            timeout=15,
+        )
+        assert conf.status_code == 200, conf.text
+        wallet = conf.json()["wallet"]
+        assert wallet["gold_grams"] > 0
+        w = requests.get(f"{BASE_URL}/api/public/metal/wallet", headers=self._ah(token), timeout=15)
+        assert w.status_code == 200
+        assert w.json()["gold_grams"] == wallet["gold_grams"]
+
+        sil = requests.post(
+            f"{BASE_URL}/api/public/metal/buy",
+            headers=self._ah(token),
+            json={"metal": "silver", "amount_inr": 500},
+            timeout=15,
+        )
+        assert sil.status_code == 200, sil.text
+        conf_s = requests.post(
+            f"{BASE_URL}/api/public/metal/buy/dev-confirm",
+            headers=self._ah(token),
+            json={"purchase_id": sil.json()["purchase_id"]},
+            timeout=15,
+        )
+        assert conf_s.status_code == 200, conf_s.text
+        assert conf_s.json()["wallet"]["silver_grams"] > 0
+
     def test_enroll_plan_not_found_404(self):
+        token, phone = self._login()
         r = requests.post(
             f"{BASE_URL}/api/public/sip/enroll",
-            headers=_h(AURELIA_HOST),
-            json={"guest_id": "TEST_x", "plan_id": "does-not-exist", "name": "x", "phone": "9"},
+            headers=self._ah(token),
+            json={"plan_id": "does-not-exist", "name": "x", "phone": phone},
             timeout=15,
         )
         assert r.status_code == 404
 
     def test_pay_locks_rate_and_computes_grams(self):
-        guest_id = f"TEST_guest_{uuid.uuid4().hex[:8]}"
+        token, phone = self._login()
         e = requests.post(
             f"{BASE_URL}/api/public/sip/enroll",
-            headers=_h(AURELIA_HOST),
-            json={"guest_id": guest_id, "plan_id": "gold-11-1", "name": "TEST Pay", "phone": "9"},
+            headers=self._ah(token),
+            json={"plan_id": "gold-11-1", "name": "TEST Pay", "phone": phone},
             timeout=15,
         ).json()
-        r = requests.post(
+        # create razorpay order then dev-confirm (mock pay path)
+        assert requests.post(
             f"{BASE_URL}/api/public/sip/enrollments/{e['id']}/pay",
-            headers=_h(AURELIA_HOST),
-            json={"guest_id": guest_id},
+            headers=self._ah(token),
+            json={},
+            timeout=15,
+        ).status_code == 200
+        r = requests.post(
+            f"{BASE_URL}/api/public/sip/enrollments/{e['id']}/pay/dev-confirm",
+            headers=self._ah(token),
+            json={},
             timeout=15,
         )
         assert r.status_code == 200, r.text
@@ -126,28 +197,27 @@ class TestSip:
         assert paid["summary"]["paid_installments"] == 1
         assert paid["summary"]["grams_accrued"] > 0
         assert paid["summary"]["current_value"] is not None
-        # installment 1 should be paid, installment 2 should now be 'due'
         insts = paid["installments"]
         assert insts[0]["status"] == "paid"
         assert insts[0]["rate_locked"] is not None
         assert insts[0]["grams"] is not None
-        # math: grams == amount / rate_locked (rounded 4dp)
         expected = round(insts[0]["amount"] / insts[0]["rate_locked"], 4)
         assert abs(insts[0]["grams"] - expected) < 1e-4
         assert insts[1]["status"] == "due"
 
-    def test_pay_wrong_guest_id_404(self):
-        guest_id = f"TEST_guest_{uuid.uuid4().hex[:8]}"
+    def test_pay_wrong_customer_404(self):
+        token_a, phone_a = self._login()
+        token_b, _ = self._login()
         e = requests.post(
             f"{BASE_URL}/api/public/sip/enroll",
-            headers=_h(AURELIA_HOST),
-            json={"guest_id": guest_id, "plan_id": "gold-flex", "name": "x", "phone": "9"},
+            headers=self._ah(token_a),
+            json={"plan_id": "gold-flex", "name": "x", "phone": phone_a},
             timeout=15,
         ).json()
         r = requests.post(
             f"{BASE_URL}/api/public/sip/enrollments/{e['id']}/pay",
-            headers=_h(AURELIA_HOST),
-            json={"guest_id": "TEST_someone_else"},
+            headers=self._ah(token_b),
+            json={},
             timeout=15,
         )
         assert r.status_code == 404
@@ -155,6 +225,23 @@ class TestSip:
 
 # -------- Orders --------
 class TestOrders:
+    def _login(self):
+        phone = f"8{uuid.uuid4().int % 10**9:09d}"
+        h = _h(AURELIA_HOST)
+        requests.post(f"{BASE_URL}/api/public/auth/otp/request", headers=h, json={"phone": phone}, timeout=15).raise_for_status()
+        code = os.environ.get("OTP_DEV_CODE", "123456")
+        r = requests.post(
+            f"{BASE_URL}/api/public/auth/otp/verify",
+            headers=h,
+            json={"phone": phone, "code": code},
+            timeout=15,
+        )
+        r.raise_for_status()
+        return r.json()["access_token"]
+
+    def _ah(self, token):
+        return {**_h(AURELIA_HOST), "Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+
     def _item(self):
         return {
             "product_id": "aur-rings-0",
@@ -164,9 +251,8 @@ class TestOrders:
             "image": None,
         }
 
-    def _payload(self, guest_id):
+    def _payload(self):
         return {
-            "guest_id": guest_id,
             "items": [self._item()],
             "contact": {"name": "TEST Buyer", "phone": "9999900000", "email": "t@t.com"},
             "address": {"line1": "1 Test Ln", "city": "Jaipur", "state": "RJ", "pincode": "302001"},
@@ -174,11 +260,11 @@ class TestOrders:
         }
 
     def test_create_order_and_get(self):
-        guest_id = f"TEST_guest_{uuid.uuid4().hex[:8]}"
+        token = self._login()
         r = requests.post(
             f"{BASE_URL}/api/public/orders",
-            headers=_h(AURELIA_HOST),
-            json=self._payload(guest_id),
+            headers=self._ah(token),
+            json=self._payload(),
             timeout=15,
         )
         assert r.status_code == 200, r.text
@@ -186,76 +272,83 @@ class TestOrders:
         assert o["status"] == "reserved"
         assert o["order_no"].startswith("RSV-")
         assert o["subtotal"] == 189000 * 2
-        assert o["guest_id"] == guest_id
 
-        # persistence check
         lst = requests.get(
             f"{BASE_URL}/api/public/orders",
-            headers=_h(AURELIA_HOST),
-            params={"guest_id": guest_id},
+            headers=self._ah(token),
             timeout=15,
         ).json()
         assert len(lst) == 1
         assert lst[0]["id"] == o["id"]
 
     def test_empty_items_400(self):
-        p = self._payload(f"TEST_g_{uuid.uuid4().hex[:6]}")
+        token = self._login()
+        p = self._payload()
         p["items"] = []
         r = requests.post(
-            f"{BASE_URL}/api/public/orders", headers=_h(AURELIA_HOST), json=p, timeout=15
+            f"{BASE_URL}/api/public/orders", headers=self._ah(token), json=p, timeout=15
         )
         assert r.status_code == 400
 
 
 # -------- Cross-tenant isolation for orders & SIP --------
 class TestTenantIsolationNew:
+    def _login(self, host):
+        phone = f"7{uuid.uuid4().int % 10**9:09d}"
+        h = _h(host)
+        requests.post(f"{BASE_URL}/api/public/auth/otp/request", headers=h, json={"phone": phone}, timeout=15).raise_for_status()
+        code = os.environ.get("OTP_DEV_CODE", "123456")
+        r = requests.post(f"{BASE_URL}/api/public/auth/otp/verify", headers=h, json={"phone": phone, "code": code}, timeout=15)
+        r.raise_for_status()
+        return r.json()["access_token"], phone
+
     def test_order_created_on_aurelia_not_visible_on_noir(self):
-        guest_id = f"TEST_guest_{uuid.uuid4().hex[:8]}"
+        token_a, _ = self._login(AURELIA_HOST)
+        token_n, _ = self._login(NOIR_HOST)
         payload = {
-            "guest_id": guest_id,
             "items": [{"product_id": "aur-rings-0", "name": "x", "price": 100, "qty": 1}],
-            "contact": {"name": "n", "phone": "9"},
-            "address": {"line1": "a", "city": "b", "pincode": "1"},
+            "contact": {"name": "n", "phone": "9876543210"},
+            "address": {"line1": "a", "city": "b", "pincode": "400001"},
         }
         r = requests.post(
-            f"{BASE_URL}/api/public/orders", headers=_h(AURELIA_HOST), json=payload, timeout=15
+            f"{BASE_URL}/api/public/orders",
+            headers={**_h(AURELIA_HOST), "Authorization": f"Bearer {token_a}", "Content-Type": "application/json"},
+            json=payload,
+            timeout=15,
         )
         assert r.status_code == 200
         noir_orders = requests.get(
             f"{BASE_URL}/api/public/orders",
-            headers=_h(NOIR_HOST),
-            params={"guest_id": guest_id},
+            headers={**_h(NOIR_HOST), "Authorization": f"Bearer {token_n}"},
             timeout=15,
         ).json()
         assert noir_orders == []
         aur_orders = requests.get(
             f"{BASE_URL}/api/public/orders",
-            headers=_h(AURELIA_HOST),
-            params={"guest_id": guest_id},
+            headers={**_h(AURELIA_HOST), "Authorization": f"Bearer {token_a}"},
             timeout=15,
         ).json()
         assert len(aur_orders) == 1
 
     def test_sip_enrollment_on_aurelia_not_visible_on_noir(self):
-        guest_id = f"TEST_guest_{uuid.uuid4().hex[:8]}"
+        token_a, phone = self._login(AURELIA_HOST)
+        token_n, _ = self._login(NOIR_HOST)
         r = requests.post(
             f"{BASE_URL}/api/public/sip/enroll",
-            headers=_h(AURELIA_HOST),
-            json={"guest_id": guest_id, "plan_id": "silver-12", "name": "x", "phone": "9"},
+            headers={**_h(AURELIA_HOST), "Authorization": f"Bearer {token_a}", "Content-Type": "application/json"},
+            json={"plan_id": "silver-12", "name": "x", "phone": phone},
             timeout=15,
         )
         assert r.status_code == 200
         n = requests.get(
             f"{BASE_URL}/api/public/sip/enrollments",
-            headers=_h(NOIR_HOST),
-            params={"guest_id": guest_id},
+            headers={**_h(NOIR_HOST), "Authorization": f"Bearer {token_n}"},
             timeout=15,
         ).json()
         assert n == []
         a = requests.get(
             f"{BASE_URL}/api/public/sip/enrollments",
-            headers=_h(AURELIA_HOST),
-            params={"guest_id": guest_id},
+            headers={**_h(AURELIA_HOST), "Authorization": f"Bearer {token_a}"},
             timeout=15,
         ).json()
         assert len(a) == 1

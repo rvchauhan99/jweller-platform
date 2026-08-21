@@ -10,7 +10,7 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.emergent.mobiledevhub.rynavg"
+      "bundleIdentifier": "app.luxejewel.aurelia"
     },
     "android": {
       "adaptiveIcon": {
@@ -18,7 +18,7 @@
         "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.emergent.mobiledevhub.rynavg"
+      "package": "app.luxejewel.aurelia"
     },
     "web": {
       "bundler": "metro",

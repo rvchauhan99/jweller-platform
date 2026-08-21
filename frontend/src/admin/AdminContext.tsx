@@ -10,6 +10,19 @@ export interface AdminInfo {
   business_name: string;
   role: string;
   status: string;
+  username?: string;
+}
+
+function usernameFromJwt(token: string): string | undefined {
+  try {
+    const part = token.split(".")[1];
+    if (!part) return undefined;
+    const normalized = part.replace(/-/g, "+").replace(/_/g, "/");
+    const json = JSON.parse(atob(normalized));
+    return typeof json?.username === "string" ? json.username : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 interface AdminCtx {
@@ -60,7 +73,7 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
         try {
           const me = await adminFetch<AdminInfo>("/admin/me");
           setToken(saved);
-          setAdmin(me);
+          setAdmin({ ...me, username: me.username || usernameFromJwt(saved) });
         } catch {
           CURRENT_TOKEN = null;
           await storage.removeItem(TOKEN_KEY);
@@ -79,7 +92,13 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
       CURRENT_TOKEN = data.access_token;
       await storage.setItem(TOKEN_KEY, data.access_token);
       setToken(data.access_token);
-      setAdmin({ tenant_code: data.tenant_code, business_name: data.business_name, role: data.role, status: "active" });
+      setAdmin({
+        tenant_code: data.tenant_code,
+        business_name: data.business_name,
+        role: data.role,
+        status: "active",
+        username: data.username || usernameFromJwt(data.access_token),
+      });
       return { ok: true };
     } catch (e: any) {
       return { ok: false, error: e?.message ?? "Login failed" };

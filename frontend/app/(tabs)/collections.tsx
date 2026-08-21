@@ -1,9 +1,10 @@
 import React, { useCallback, useEffect, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import Feather from "@expo/vector-icons/Feather";
 
 import { Category, getCategories } from "@/src/api/client";
 import { useStore } from "@/src/theme/StoreProvider";
@@ -17,6 +18,7 @@ export default function CollectionsScreen() {
   const insets = useSafeAreaInsets();
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
+  const [searchDraft, setSearchDraft] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -33,11 +35,19 @@ export default function CollectionsScreen() {
     if (status === "ready") load();
   }, [status, load]);
 
+  const handleSearch = () => {
+    const q = searchDraft.trim();
+    if (!q) {
+      router.push("/search");
+      return;
+    }
+    router.push(`/search?q=${encodeURIComponent(q)}`);
+  };
+
   if (status === "loading") return <LoadingView />;
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.background }} testID="collections-screen">
-      {/* Sticky header */}
       <View
         style={[
           styles.header,
@@ -54,6 +64,39 @@ export default function CollectionsScreen() {
             </Text>
           </View>
           <HeaderIcons />
+        </View>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 10 }}>
+          <TextInput
+            testID="collections-search"
+            value={searchDraft}
+            onChangeText={setSearchDraft}
+            onSubmitEditing={handleSearch}
+            placeholder="Search all pieces…"
+            placeholderTextColor={theme.colors.muted}
+            returnKeyType="search"
+            style={{
+              flex: 1,
+              height: 42,
+              borderWidth: 1,
+              borderColor: theme.colors.border,
+              backgroundColor: theme.colors.surface,
+              borderRadius: theme.radius.md,
+              paddingHorizontal: 12,
+              color: theme.colors.text,
+              fontFamily: theme.fonts.body,
+              fontSize: 14,
+            }}
+            accessibilityLabel="Search products"
+          />
+          <Pressable
+            testID="collections-search-go"
+            onPress={handleSearch}
+            style={{ height: 42, width: 42, alignItems: "center", justifyContent: "center", backgroundColor: theme.colors.primary, borderRadius: theme.radius.md }}
+            accessibilityRole="button"
+            accessibilityLabel="Open search"
+          >
+            <Feather name="search" size={18} color={theme.colors.onPrimary || "#fff"} />
+          </Pressable>
         </View>
       </View>
 

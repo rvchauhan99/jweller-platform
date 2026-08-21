@@ -1,6 +1,6 @@
 # AGENTS.md — Jewelers Platform
 
-Private multi-tenant jewelers SaaS. **This repository is the monorepo:** docs + FastAPI (`backend/`) + Expo (`frontend/`). Progress: [`docs/PROGRESS.md`](docs/PROGRESS.md).
+Private multi-tenant jewelers SaaS. **This repository is the monorepo:** docs + FastAPI (`backend/`) + Expo (`frontend/`) + Next.js jeweler admin (`admin/`). Progress: [`docs/PROGRESS.md`](docs/PROGRESS.md).
 
 ## Do not
 
@@ -9,6 +9,7 @@ Private multi-tenant jewelers SaaS. **This repository is the monorepo:** docs + 
 - Deploy, commit, or open PRs unless explicitly asked.
 - Add an in-app store switcher to the customer app (white-label only).
 - Restyle jeweler admin as the storefront theme preset.
+- Deprecate Expo `/admin` in favor of web-only — dual clients are intentional.
 - Rebuild features already marked **Done** in PROGRESS unless asked.
 
 ## Read order
@@ -36,5 +37,15 @@ Private multi-tenant jewelers SaaS. **This repository is the monorepo:** docs + 
 ## When editing code
 
 - Prefer updating `docs/PROGRESS.md` (and related docs) in the same change set when behavior changes.
-- Backend: `backend/server.py` (monolith today) + `backend/tests/`.
-- Frontend: `frontend/app/` (customer) and `frontend/app/admin/` (interim).
+- Backend: `backend/server.py` + `backend/routers/` + `backend/tests/`.
+- Frontend customer + phone admin: `frontend/app/` and `frontend/app/admin/`.
+- Web jeweler admin: `admin/` (Next.js; cookie BFF → `/api/admin`).
+- Platform console: `platform-admin/` (Next.js; cookie BFF → `/api/platform`).
+
+## Mandatory testing gate
+
+**After every successful development integration, mock pytest is mandatory for all use cases before marking Done.** See [`docs/TESTING.md`](docs/TESTING.md).
+
+- Run: `cd backend && pytest -q` (must be green).
+- SMS / Razorpay must be **mocked** in tests — no live API keys required for the gate.
+- Do not update PROGRESS to Done until the gate passes.

@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.env
+.env.*
+!.env.example
+
+# Tests / local tooling
+tests/
+scripts/
+pytest.ini
+.pytest_cache/
+.r2_mock/
+*.md
+
+# Git / IDE
+.git/
+.gitignore
+.DS_Store

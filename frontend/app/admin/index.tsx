@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from "react";
 import { StyleSheet, Text, View, useWindowDimensions } from "react-native";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useFocusEffect } from "expo-router";
 import Feather from "@expo/vector-icons/Feather";
 
 import { A, money, STATUS_COLOR } from "@/src/admin/theme";
@@ -9,7 +9,6 @@ import { AdminShell } from "@/src/admin/AdminShell";
 
 export default function AdminDashboard() {
   const { width } = useWindowDimensions();
-  const router = useRouter();
   const [data, setData] = useState<any>(null);
 
   useFocusEffect(
@@ -28,13 +27,14 @@ export default function AdminDashboard() {
     </View>
   );
 
+  const sales = data?.sales_today;
+
   return (
     <AdminShell title="Dashboard" subtitle="Your work queue for today">
       {!data ? (
         <Text style={{ fontFamily: A.font, color: A.muted }}>Loading…</Text>
       ) : (
         <>
-          {/* Pending work (queue first, not vanity KPIs) */}
           <View style={styles.grid}>
             <Metric label="Pending orders" value={String(data.pending_orders)} tone={data.pending_orders ? A.warning : A.text} />
             <Metric label="SIP due today" value={String(data.sip_due)} tone={data.sip_due ? A.warning : A.text} />
@@ -42,7 +42,22 @@ export default function AdminDashboard() {
             <Metric label="Active SIP plans" value={String(data.sip_active)} />
           </View>
 
-          {/* Rate health */}
+          <View style={styles.panel} testID="sales-today-panel">
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              <Feather name="dollar-sign" size={16} color={A.accent} />
+              <Text style={{ fontFamily: A.fontMed, fontSize: 14, color: A.text, marginLeft: 8, flex: 1 }}>{"Today's sales"}</Text>
+              <Text style={{ fontFamily: A.fontMed, fontSize: 16, color: A.text }}>{money(sales?.total ?? 0)}</Text>
+            </View>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 16, marginTop: 10 }}>
+              <Text style={{ fontFamily: A.font, fontSize: 12, color: A.muted }}>Online {money(sales?.online ?? 0)}</Text>
+              <Text style={{ fontFamily: A.font, fontSize: 12, color: A.muted }}>Offline {money(sales?.offline ?? 0)}</Text>
+              <Text style={{ fontFamily: A.font, fontSize: 12, color: A.muted }}>{sales?.order_count ?? 0} bills</Text>
+            </View>
+            <Text style={{ fontFamily: A.font, fontSize: 12, color: A.muted, marginTop: 10 }}>
+              POS, purchases & CSV reports are on the desktop admin
+            </Text>
+          </View>
+
           <View style={styles.panel}>
             <View style={{ flexDirection: "row", alignItems: "center" }}>
               <Feather name="trending-up" size={16} color={A.accent} />
@@ -60,7 +75,6 @@ export default function AdminDashboard() {
             </Text>
           </View>
 
-          {/* Recent activity */}
           <Text style={styles.section}>Recent reservations</Text>
           <View style={styles.panel}>
             {data.recent_orders.length === 0 ? (

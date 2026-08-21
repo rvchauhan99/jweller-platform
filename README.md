@@ -1,12 +1,14 @@
 # Jewelers Platform (jweller-platform)
 
-**Monorepo:** product docs, Cursor/agent rules, FastAPI backend, and Expo white-label customer app (plus interim admin).
+**Monorepo:** product docs, Cursor/agent rules, FastAPI backend, Expo white-label customer app + phone admin, and Next.js web jeweler admin.
 
 | Path | Role |
 |------|------|
 | [`docs/`](docs/) | Spec, locks, progress |
 | [`backend/`](backend/) | FastAPI + Motor |
-| [`frontend/`](frontend/) | Expo storefront + interim `/admin` |
+| [`frontend/`](frontend/) | Expo storefront + phone `/admin` |
+| [`admin/`](admin/) | Next.js dense jeweler admin (web) |
+| [`platform-admin/`](platform-admin/) | Next.js platform console (create/suspend tenants) |
 | [`AGENTS.md`](AGENTS.md) | Agent non-negotiables |
 | [`.cursor/`](.cursor/) / [`.agents/`](.agents/) | Cursor rules + better-web-ui skills |
 
@@ -24,7 +26,7 @@ One shared FastAPI backend serves N jewelers (tenants). Each tenant gets:
 - one or more **customer site URLs** in the Registry
 - a **theme** (seeded / edited in admin)
 - a **white-label customer app** (Expo; one Play Store listing per jeweler — packaging pending)
-- staff login with a **tenant code** (interim Expo admin; Next.js admin is the target)
+- staff login with a **tenant code** on **both** Expo admin and Next.js web admin (shared `/api/admin/*`)
 
 ## Locked product rules
 
@@ -33,6 +35,7 @@ One shared FastAPI backend serves N jewelers (tenants). Each tenant gets:
 3. **Theme is per tenant** (seed + admin editor today; create wizard later).
 4. **Three visual languages.** Customer luxury vs dense admin vs platform console. See [`docs/FRONTEND.md`](docs/FRONTEND.md).
 5. **Customer native = white-label only** — no in-app store switcher.
+6. **Dual jeweler admin** — Expo phone ops + Next.js web ERP; POS/reports are web-first.
 
 ## Read order
 
@@ -45,9 +48,26 @@ One shared FastAPI backend serves N jewelers (tenants). Each tenant gets:
 jweller-platform/
   docs/
   backend/
-  frontend/
+  frontend/   # Expo storefront + /admin
+  admin/      # Next.js jeweler admin
+  platform-admin/  # platform console
   memory/PRD.md
   AGENTS.md
   .cursor/
   .agents/
 ```
+
+## Quick start (local)
+
+```bash
+# API
+cd backend && uvicorn server:app --reload --port 8000
+
+# Expo storefront / phone admin
+cd frontend && npx expo start
+
+# Web jeweler admin
+cd admin && npm run dev
+```
+
+Demo admin: **AURELIA** / `owner` / `Aurelia@123`

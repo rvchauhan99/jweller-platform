@@ -1,25 +1,45 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 import { KeyboardAwareScrollView } from "react-native-keyboard-controller";
 import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Feather from "@expo/vector-icons/Feather";
 
-import { createOrder } from "@/src/api/client";
+import { createOrder, orderPay, orderPayConfirm, orderPayDevConfirm } from "@/src/api/client";
 import { useStore } from "@/src/theme/StoreProvider";
 import { formatMoney } from "@/src/theme/tokens";
-import { getGuestId } from "@/src/utils/guest";
 import { useCart } from "@/src/context/CartContext";
+import { useCustomerAuth } from "@/src/context/CustomerAuthContext";
+import { RazorpayCheckoutModal, RazorpayCheckoutOptions } from "@/src/payments/RazorpayCheckoutModal";
 
 export default function CheckoutScreen() {
-  const { code, theme } = useStore();
+  const { code, theme, businessName } = useStore();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { items, subtotal, clear } = useCart();
+  const { token, customer, ready } = useCustomerAuth();
 
   const [f, setF] = useState({ name: "", phone: "", email: "", line1: "", city: "", state: "", pincode: "", note: "" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pendingOrderId, setPendingOrderId] = useState<string | null>(null);
+  const [checkoutOpts, setCheckoutOpts] = useState<RazorpayCheckoutOptions | null>(null);
+
+  useEffect(() => {
+    if (!ready) return;
+    if (!token) {
+      router.replace("/login?next=/checkout");
+      return;
+    }
+    if (customer) {
+      setF((prev) => ({
+        ...prev,
+        name: prev.name || customer.name || "",
+        phone: prev.phone || customer.phone || "",
+        email: prev.email || customer.email || "",
+      }));
+    }
+  }, [ready, token, customer, router]);
 
   const set = (k: keyof typeof f) => (v: string) => setF((prev) => ({ ...prev, [k]: v }));
 
@@ -28,23 +48,59 @@ export default function CheckoutScreen() {
     [f]
   );
 
+  const finishPaid = () => {
+    clear();
+    setCheckoutOpts(null);
+    setPendingOrderId(null);
+    setBusy(false);
+    router.replace("/orders?justPlaced=1");
+  };
+
   const submit = async () => {
-    if (!valid || items.length === 0) return;
+    if (!valid || items.length === 0 || !token) return;
     setBusy(true);
     setError(null);
     try {
-      const gid = await getGuestId();
-      await createOrder(code, {
-        guest_id: gid,
+      const order = await createOrder(code, {
         items: items.map((i) => ({ product_id: i.product_id, name: i.name, price: i.price, qty: i.qty, image: i.image })),
         contact: { name: f.name.trim(), phone: f.phone.trim(), email: f.email.trim() || undefined },
         address: { line1: f.line1.trim(), city: f.city.trim(), state: f.state.trim() || undefined, pincode: f.pincode.trim() },
         note: f.note.trim() || undefined,
       });
-      clear();
-      router.replace("/orders?justPlaced=1");
+      const pay = await orderPay(code, order.id);
+      if (pay.mock) {
+        await orderPayDevConfirm(code, order.id);
+        finishPaid();
+        return;
+      }
+      setPendingOrderId(order.id);
+      setCheckoutOpts({
+        keyId: pay.key_id,
+        orderId: pay.razorpay_order_id,
+        amountPaise: pay.amount,
+        currency: pay.currency || "INR",
+        name: businessName || "Store",
+        description: `Order ${order.order_no}`,
+        prefill: { name: f.name.trim(), email: f.email.trim() || undefined, contact: f.phone.trim() },
+      });
     } catch (e: any) {
-      setError(e?.message ?? "Could not place reservation.");
+      setError(e?.message ?? "Could not complete payment.");
+      setBusy(false);
+    }
+  };
+
+  const handleCheckoutSuccess = async (payload: {
+    razorpay_order_id: string;
+    razorpay_payment_id: string;
+    razorpay_signature: string;
+  }) => {
+    if (!pendingOrderId) return;
+    try {
+      await orderPayConfirm(code, pendingOrderId, payload);
+      finishPaid();
+    } catch (e: any) {
+      setError(e?.message ?? "Payment verification failed.");
+      setCheckoutOpts(null);
       setBusy(false);
     }
   };
@@ -62,70 +118,102 @@ export default function CheckoutScreen() {
     marginTop: 6,
   };
 
+  if (!ready || !token) {
+    return <View style={{ flex: 1, backgroundColor: theme.colors.background }} />;
+  }
+
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.background }} testID="checkout-screen">
       <View style={[styles.header, { paddingTop: insets.top + theme.spacing.sm, borderBottomColor: theme.colors.border }]}>
-        <Pressable testID="checkout-back" onPress={() => router.back()} hitSlop={12}>
+        <Pressable testID="checkout-back" onPress={() => router.back()} hitSlop={12} accessibilityRole="button" accessibilityLabel="Go back">
           <Feather name="chevron-left" size={26} color={theme.colors.headerText} />
         </Pressable>
         <Text style={{ fontFamily: theme.fonts.heading, fontSize: theme.fontSize["2xl"], color: theme.colors.headerText, marginLeft: 8 }}>
-          Reservation details
+          Checkout & pay
         </Text>
       </View>
 
       <KeyboardAwareScrollView contentContainerStyle={{ padding: theme.spacing.lg, paddingBottom: 120 }} bottomOffset={90} showsVerticalScrollIndicator={false}>
+        <Text style={{ fontFamily: theme.fonts.body, color: theme.colors.muted, fontSize: 13, marginBottom: 12 }}>
+          Total {formatMoney(subtotal)} · Razorpay Test Mode
+        </Text>
         <Section title="Contact" />
         <Input placeholder="Full name" style={inputStyle} value={f.name} onChangeText={set("name")} testID="checkout-name" />
         <Input placeholder="Mobile number" keyboardType="phone-pad" style={inputStyle} value={f.phone} onChangeText={set("phone")} testID="checkout-phone" />
         <Input placeholder="Email (optional)" keyboardType="email-address" autoCapitalize="none" style={inputStyle} value={f.email} onChangeText={set("email")} testID="checkout-email" />
 
-        <Section title="Pickup / delivery address" />
+        <Section title="Address" />
         <Input placeholder="Address line" style={inputStyle} value={f.line1} onChangeText={set("line1")} testID="checkout-line1" />
         <Input placeholder="City" style={inputStyle} value={f.city} onChangeText={set("city")} testID="checkout-city" />
-        <Input placeholder="State (optional)" style={inputStyle} value={f.state} onChangeText={set("state")} testID="checkout-state" />
-        <Input placeholder="Pincode" keyboardType="number-pad" style={inputStyle} value={f.pincode} onChangeText={set("pincode")} testID="checkout-pincode" />
-        <Input placeholder="Note for the jeweler (optional)" style={inputStyle} value={f.note} onChangeText={set("note")} testID="checkout-note" />
+        <Input placeholder="State" style={inputStyle} value={f.state} onChangeText={set("state")} testID="checkout-state" />
+        <Input placeholder="PIN code" keyboardType="number-pad" style={inputStyle} value={f.pincode} onChangeText={set("pincode")} testID="checkout-pincode" />
+        <Input placeholder="Note (optional)" style={inputStyle} value={f.note} onChangeText={set("note")} testID="checkout-note" />
 
         {error ? (
-          <Text testID="checkout-error" style={{ fontFamily: theme.fonts.body, color: theme.colors.secondary, fontSize: theme.fontSize.sm, marginTop: theme.spacing.md }}>{error}</Text>
+          <View
+            testID="checkout-error-banner"
+            style={{
+              marginTop: 16,
+              padding: 14,
+              borderWidth: 1,
+              borderColor: "#FECACA",
+              backgroundColor: "#FEF2F2",
+              borderRadius: theme.radius.md,
+            }}
+            accessibilityLabel="Payment error"
+          >
+            <Text style={{ fontFamily: theme.fonts.bodyMedium, color: "#991B1B", fontSize: 14 }}>
+              {error.includes("cancel") || error.toLowerCase().includes("cancelled")
+                ? "Payment cancelled"
+                : error.toLowerCase().includes("fail")
+                  ? "Payment failed"
+                  : "Payment issue"}
+            </Text>
+            <Text style={{ fontFamily: theme.fonts.body, color: "#B91C1C", fontSize: 13, marginTop: 4 }}>{error}</Text>
+            <Text style={{ fontFamily: theme.fonts.body, color: theme.colors.muted, fontSize: 12, marginTop: 8 }}>
+              Your bag is unchanged. You can try again when ready.
+            </Text>
+          </View>
         ) : null}
-      </KeyboardAwareScrollView>
 
-      <View style={[styles.bar, { paddingBottom: insets.bottom + theme.spacing.md, backgroundColor: theme.colors.surface, borderTopColor: theme.colors.border }]}>
         <Pressable
-          testID="place-reservation-button"
-          disabled={busy || !valid}
+          testID="checkout-submit"
+          disabled={!valid || busy}
           onPress={submit}
-          style={[styles.cta, { backgroundColor: theme.colors.primary, borderRadius: theme.radius.pill, opacity: busy || !valid ? 0.5 : 1 }]}
+          style={[styles.btn, { backgroundColor: theme.colors.primary, opacity: !valid || busy ? 0.5 : 1 }]}
+          accessibilityRole="button"
+          accessibilityLabel="Pay now"
         >
-          <Text style={{ fontFamily: theme.fonts.bodyMedium, color: theme.colors.onPrimary, fontSize: theme.fontSize.base }}>
-            {busy ? "Placing…" : `Reserve · ${formatMoney(subtotal)}`}
+          <Text style={{ fontFamily: theme.fonts.body, color: theme.colors.onPrimary || "#fff", fontSize: 16 }}>
+            {busy ? "Processing…" : `Pay ${formatMoney(subtotal)}`}
           </Text>
         </Pressable>
-        <Text style={{ fontFamily: theme.fonts.body, color: theme.colors.muted, fontSize: theme.fontSize.sm, textAlign: "center", marginTop: 8 }}>
-          No online payment — the store will contact you to confirm.
-        </Text>
-      </View>
+      </KeyboardAwareScrollView>
+
+      <RazorpayCheckoutModal
+        visible={!!checkoutOpts}
+        options={checkoutOpts}
+        onSuccess={handleCheckoutSuccess}
+        onDismiss={(reason) => {
+          setCheckoutOpts(null);
+          setBusy(false);
+          if (reason) setError(reason);
+        }}
+      />
     </View>
   );
 }
 
-function Section({ title }: { title: string }) {
+const Section = ({ title }: { title: string }) => {
   const { theme } = useStore();
   return (
-    <Text style={{ fontFamily: theme.fonts.body, fontSize: theme.fontSize.sm, letterSpacing: 2, color: theme.colors.secondary, marginTop: theme.spacing.lg, marginBottom: 4 }}>
-      {title.toUpperCase()}
-    </Text>
+    <Text style={{ fontFamily: theme.fonts.heading, fontSize: 18, color: theme.colors.text, marginTop: 18, marginBottom: 4 }}>{title}</Text>
   );
-}
+};
 
-function Input(props: React.ComponentProps<typeof TextInput>) {
-  const { theme } = useStore();
-  return <TextInput placeholderTextColor={theme.colors.muted} autoCorrect={false} {...props} />;
-}
+const Input = (props: any) => <TextInput placeholderTextColor="#94A3B8" {...props} />;
 
 const styles = StyleSheet.create({
-  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth },
-  bar: { position: "absolute", left: 0, right: 0, bottom: 0, paddingHorizontal: 16, paddingTop: 14, borderTopWidth: StyleSheet.hairlineWidth },
-  cta: { height: 52, alignItems: "center", justifyContent: "center" },
+  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1 },
+  btn: { height: 52, borderRadius: 12, alignItems: "center", justifyContent: "center", marginTop: 24 },
 });

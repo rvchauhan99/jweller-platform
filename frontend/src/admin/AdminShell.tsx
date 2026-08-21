@@ -11,10 +11,20 @@ const NAV: { label: string; path: string; icon: keyof typeof Feather.glyphMap }[
   { label: "Dashboard", path: "/admin", icon: "home" },
   { label: "Inventory", path: "/admin/inventory", icon: "box" },
   { label: "Orders", path: "/admin/orders", icon: "shopping-bag" },
+  { label: "Customers", path: "/admin/customers", icon: "users" },
   { label: "Gold SIP", path: "/admin/sip", icon: "trending-up" },
+  { label: "Staff", path: "/admin/staff", icon: "user-check" },
   { label: "Branding", path: "/admin/branding", icon: "droplet" },
   { label: "Settings", path: "/admin/settings", icon: "settings" },
 ];
+
+const isNavActive = (pathname: string, path: string) => {
+  if (path === "/admin") return pathname === "/admin" || pathname === "/admin/";
+  if (path === "/admin/customers") {
+    return pathname === "/admin/customers" || pathname.startsWith("/admin/customer/");
+  }
+  return pathname === path || pathname.startsWith(`${path}/`);
+};
 
 export function AdminShell({
   title,
@@ -35,7 +45,7 @@ export function AdminShell({
   const wide = width >= 900;
 
   const NavItem = ({ item, horizontal }: { item: (typeof NAV)[number]; horizontal?: boolean }) => {
-    const active = pathname === item.path;
+    const active = isNavActive(pathname, item.path);
     return (
       <Pressable
         testID={`admin-nav-${item.label.toLowerCase().replace(/\s/g, "-")}`}

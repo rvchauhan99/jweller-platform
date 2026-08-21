@@ -37,7 +37,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="sip"
         options={{
-          title: "Gold SIP",
+          title: "Metal SIP",
           tabBarIcon: ({ color, size }) => <Feather name="trending-up" size={size} color={color} />,
           tabBarBadge: dueCount > 0 ? dueCount : undefined,
           tabBarBadgeStyle: { backgroundColor: theme.colors.primary, color: theme.colors.onPrimary, fontSize: 10 },

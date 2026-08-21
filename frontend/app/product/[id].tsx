@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import { NativeScrollEvent, NativeSyntheticEvent, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
@@ -25,12 +25,15 @@ export default function ProductScreen() {
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
   const [failed, setFailed] = useState(false);
+  const [imageIndex, setImageIndex] = useState(0);
+  const galleryRef = useRef<ScrollView>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setFailed(false);
     try {
       setProduct(await getProduct(code, String(id)));
+      setImageIndex(0);
     } catch {
       setFailed(true);
     } finally {
@@ -42,12 +45,20 @@ export default function ProductScreen() {
     load();
   }, [load]);
 
+  const handleGalleryScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const x = e.nativeEvent.contentOffset.x;
+    const idx = Math.round(x / width);
+    if (idx !== imageIndex) setImageIndex(idx);
+  };
+
   const BackButton = () => (
     <Pressable
       testID="product-back"
       onPress={() => router.back()}
       style={[styles.backBtn, { top: insets.top + 8, backgroundColor: "rgba(0,0,0,0.35)" }]}
       hitSlop={10}
+      accessibilityRole="button"
+      accessibilityLabel="Go back"
     >
       <Feather name="chevron-left" size={24} color="#FFFFFF" />
     </Pressable>
@@ -63,14 +74,50 @@ export default function ProductScreen() {
     );
   }
 
+  const images = (product.images?.length ? product.images : []).filter(Boolean);
+  const gallery = images.length ? images : ["https://placehold.co/800x900/png?text=Jewel"];
   const imageH = width * 1.15;
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.background }} testID="product-screen">
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 110 }}>
-        <View style={{ height: imageH }}>
-          <Image source={{ uri: product.images?.[0] }} style={StyleSheet.absoluteFillObject} contentFit="cover" transition={350} accessibilityLabel={product.name} />
-          <LinearGradient colors={["rgba(0,0,0,0.35)", "transparent"]} style={{ height: 120 }} />
+        <View style={{ height: imageH }} testID="product-gallery">
+          <ScrollView
+            ref={galleryRef}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            onScroll={handleGalleryScroll}
+            scrollEventThrottle={16}
+          >
+            {gallery.map((uri, i) => (
+              <Image
+                key={`${uri}-${i}`}
+                source={{ uri }}
+                style={{ width, height: imageH }}
+                contentFit="cover"
+                transition={350}
+                accessibilityLabel={`${product.name} image ${i + 1}`}
+              />
+            ))}
+          </ScrollView>
+          <LinearGradient colors={["rgba(0,0,0,0.35)", "transparent"]} style={{ position: "absolute", top: 0, left: 0, right: 0, height: 120 }} pointerEvents="none" />
+          {gallery.length > 1 ? (
+            <View style={styles.dots} pointerEvents="none">
+              {gallery.map((_, i) => (
+                <View
+                  key={i}
+                  testID={`gallery-dot-${i}`}
+                  style={{
+                    width: i === imageIndex ? 18 : 6,
+                    height: 6,
+                    borderRadius: 999,
+                    backgroundColor: i === imageIndex ? "#FFFFFF" : "rgba(255,255,255,0.45)",
+                  }}
+                />
+              ))}
+            </View>
+          ) : null}
         </View>
         <BackButton />
         <View style={[styles.topRight, { top: insets.top + 8 }]}>
@@ -79,6 +126,8 @@ export default function ProductScreen() {
             onPress={() => product && toggle(product)}
             style={[styles.roundBtn, { backgroundColor: "rgba(0,0,0,0.35)" }]}
             hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Wishlist"
           >
             <Feather name="heart" size={20} color={product && has(product.id) ? theme.colors.primary : "#FFFFFF"} />
           </Pressable>
@@ -87,6 +136,8 @@ export default function ProductScreen() {
             onPress={() => router.push("/cart")}
             style={[styles.roundBtn, { backgroundColor: "rgba(0,0,0,0.35)" }]}
             hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Cart"
           >
             <Feather name="shopping-bag" size={20} color="#FFFFFF" />
           </Pressable>
@@ -110,13 +161,11 @@ export default function ProductScreen() {
             </Text>
           ) : null}
 
-          {/* Purity chip */}
           <View style={[styles.chip, { borderColor: theme.colors.border, borderRadius: theme.radius.pill, marginTop: theme.spacing.md }]}>
             <Feather name="award" size={13} color={theme.colors.primary} />
             <Text style={{ fontFamily: theme.fonts.bodyMedium, color: theme.colors.text, fontSize: theme.fontSize.sm }}>{product.purity} Hallmarked</Text>
           </View>
 
-          {/* Live price breakdown */}
           {product.pricing ? (
             <View style={{ marginTop: theme.spacing.xl }}>
               <Text style={{ fontFamily: theme.fonts.body, fontSize: theme.fontSize.sm, letterSpacing: 1.5, color: theme.colors.secondary, marginBottom: 4 }}>
@@ -131,12 +180,6 @@ export default function ProductScreen() {
               <View style={{ flexDirection: "row", justifyContent: "space-between", paddingVertical: theme.spacing.md, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.colors.border, marginTop: 4 }}>
                 <Text style={{ fontFamily: theme.fonts.bodyMedium, fontSize: theme.fontSize.lg, color: theme.colors.text }}>Live price</Text>
                 <Text style={{ fontFamily: theme.fonts.bodyMedium, fontSize: theme.fontSize.lg, color: theme.colors.secondary }}>{formatMoney(product.pricing.live_price)}</Text>
-              </View>
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 }}>
-                <Feather name="refresh-cw" size={12} color={theme.colors.muted} />
-                <Text style={{ fontFamily: theme.fonts.body, fontSize: theme.fontSize.sm, color: theme.colors.muted }}>
-                  Updates automatically with the live gold rate
-                </Text>
               </View>
             </View>
           ) : (
@@ -154,7 +197,6 @@ export default function ProductScreen() {
         </View>
       </ScrollView>
 
-      {/* Sticky action */}
       <View
         style={[
           styles.actionBar,
@@ -172,6 +214,8 @@ export default function ProductScreen() {
             add(product);
             router.push("/cart");
           }}
+          accessibilityRole="button"
+          accessibilityLabel="Add to bag"
         >
           <Feather name="shopping-bag" size={17} color={theme.colors.onPrimary} />
           <Text style={{ fontFamily: theme.fonts.bodyMedium, color: theme.colors.onPrimary, fontSize: theme.fontSize.base }}>
@@ -213,29 +257,8 @@ const styles = StyleSheet.create({
   },
   topRight: { position: "absolute", right: 16, flexDirection: "row", gap: 10 },
   roundBtn: { width: 40, height: 40, borderRadius: 999, alignItems: "center", justifyContent: "center" },
-  chip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    alignSelf: "flex-start",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderWidth: 1,
-  },
-  actionBar: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  actionButton: {
-    height: 52,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-  },
+  chip: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", gap: 6, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 6 },
+  actionBar: { position: "absolute", left: 0, right: 0, bottom: 0, paddingHorizontal: 16, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth },
+  actionButton: { height: 52, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8 },
+  dots: { position: "absolute", bottom: 16, left: 0, right: 0, flexDirection: "row", justifyContent: "center", gap: 6 },
 });

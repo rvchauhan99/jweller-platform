@@ -1,5 +1,5 @@
 import React, { useCallback, useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Pressable, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 import { useFocusEffect } from "expo-router";
 
 import { A } from "@/src/admin/theme";
@@ -9,12 +9,28 @@ import { AdminShell } from "@/src/admin/AdminShell";
 export default function AdminSettings() {
   const [settings, setSettings] = useState<any>(null);
   const [cms, setCms] = useState<any>(null);
+  const [gateway, setGateway] = useState<any>(null);
+  const [gatewayForbidden, setGatewayForbidden] = useState(false);
+  const [keySecret, setKeySecret] = useState("");
+  const [webhookSecret, setWebhookSecret] = useState("");
   const [savedMsg, setSavedMsg] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const [s, c] = await Promise.all([adminFetch("/admin/settings"), adminFetch("/admin/cms")]);
     setSettings(s);
     setCms(c);
+    try {
+      const gw = await adminFetch("/admin/gateway");
+      setGateway(gw);
+      setGatewayForbidden(false);
+      setKeySecret("");
+      setWebhookSecret("");
+    } catch (e: any) {
+      if (e?.status === 403) {
+        setGatewayForbidden(true);
+        setGateway(null);
+      }
+    }
   }, []);
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
@@ -45,6 +61,22 @@ export default function AdminSettings() {
       }),
     });
     flash("Storefront content saved");
+  };
+
+  const saveGateway = async () => {
+    if (!gateway) return;
+    const body: any = {
+      provider: gateway.provider || "razorpay",
+      key_id: gateway.key_id || "",
+      enabled: !!gateway.enabled,
+    };
+    if (keySecret.trim()) body.key_secret = keySecret.trim();
+    if (webhookSecret.trim()) body.webhook_secret = webhookSecret.trim();
+    const updated = await adminFetch("/admin/gateway", { method: "PUT", body: JSON.stringify(body) });
+    setGateway(updated);
+    setKeySecret("");
+    setWebhookSecret("");
+    flash("Gateway saved");
   };
 
   if (!settings || !cms) return <AdminShell title="Settings"><Text style={{ fontFamily: A.font, color: A.muted }}>Loading…</Text></AdminShell>;
@@ -85,6 +117,67 @@ export default function AdminSettings() {
         <Field label="About text"><Inp testID="cms-about-text" multiline value={cms.about_text || ""} onChangeText={(v: string) => setC("about_text", v)} /></Field>
         <Pressable testID="save-cms" onPress={saveCms} style={styles.btn}><Text style={styles.btnText}>Save content</Text></Pressable>
       </View>
+
+      {gatewayForbidden ? (
+        <>
+          <Text style={styles.section}>Payment gateway</Text>
+          <View style={styles.panel}>
+            <Text style={{ fontFamily: A.fontMed, fontSize: 14, color: A.text }} testID="gateway-owner-only">Owner only</Text>
+            <Text style={{ fontFamily: A.font, fontSize: 13, color: A.muted, marginTop: 6 }}>
+              Gateway keys can only be managed by the store owner.
+            </Text>
+          </View>
+        </>
+      ) : gateway ? (
+        <>
+          <Text style={styles.section}>Payment gateway (owner)</Text>
+          <View style={styles.panel} testID="gateway-section">
+            <Text style={{ fontFamily: A.font, fontSize: 12, color: A.muted, marginBottom: 10 }}>
+              Razorpay Model B — webhook URL: {"{API}"}/api/public/webhooks/razorpay
+            </Text>
+            <Field label="Key ID">
+              <Inp
+                testID="gateway-key-id"
+                autoCapitalize="none"
+                value={gateway.key_id || ""}
+                onChangeText={(v: string) => setGateway({ ...gateway, key_id: v })}
+              />
+            </Field>
+            <Field label={gateway.key_secret_set ? "Key secret (leave blank to keep)" : "Key secret"}>
+              <Inp
+                testID="gateway-key-secret"
+                secureTextEntry
+                autoCapitalize="none"
+                autoComplete="off"
+                placeholder={gateway.key_secret_set ? "•••••••• (set)" : ""}
+                value={keySecret}
+                onChangeText={setKeySecret}
+              />
+            </Field>
+            <Field label={gateway.webhook_secret_set ? "Webhook secret (leave blank to keep)" : "Webhook secret"}>
+              <Inp
+                testID="gateway-webhook-secret"
+                secureTextEntry
+                autoCapitalize="none"
+                autoComplete="off"
+                placeholder={gateway.webhook_secret_set ? "•••••••• (set)" : ""}
+                value={webhookSecret}
+                onChangeText={setWebhookSecret}
+              />
+            </Field>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginTop: 4, marginBottom: 8 }}>
+              <Switch
+                testID="gateway-enabled"
+                value={!!gateway.enabled}
+                onValueChange={(v) => setGateway({ ...gateway, enabled: v })}
+                trackColor={{ true: A.accent }}
+              />
+              <Text style={{ fontFamily: A.font, fontSize: 13, color: A.text }}>Gateway enabled</Text>
+            </View>
+            <Pressable testID="save-gateway" onPress={saveGateway} style={styles.btn}><Text style={styles.btnText}>Save gateway</Text></Pressable>
+          </View>
+        </>
+      ) : null}
     </AdminShell>
   );
 }

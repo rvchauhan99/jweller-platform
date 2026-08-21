@@ -10,9 +10,10 @@ Work did **not** follow Phase 1 → 7 in order. Shipped first:
 1. FastAPI + Host/`X-Tenant-Host` tenancy + seed tenants  
 2. Expo **white-label** customer app (Phase 7 early)  
 3. Live rates + guest SIP + reserve cart  
-4. Interim Expo jeweler `/admin`
+4. Interim Expo jeweler `/admin`  
+5. Next.js dense admin `admin/` (dual clients; POS/reports web-first)
 
-**Next** (priority order): OTP → Razorpay → harden storefront → modularize API → Next.js admin → platform console → R2/GST/KYC/domains → Play Store packaging.
+**Next** (priority order): Live Checkout SDK → SIP Autopay → harden storefront → modularize API → platform console → R2/GST/KYC/domains → Play Store packaging.
 
 ---
 
@@ -54,21 +55,29 @@ Spec in `docs/`. Brand name / production hostname still placeholder.
 
 ## Phase 2 — Core admin
 
-**Status: Partial** (interim Expo admin)
+**Status: Partial** (dual Expo + Next.js)
 
 | Item | Status |
 |------|--------|
-| Dashboard (pending work first) | Done (Expo) |
-| Inventory / categories CRUD | Done (Expo) |
-| Theme editor + CMS | Done (Expo) |
-| Orders pipeline (status) | Done (Expo) |
-| Settings / margins | Done (Expo) |
-| Next.js dense admin (target) | Not started |
-| POS / offline sales | Not started |
-| Purchases + weighted average cost | Not started |
-| R2 product images | Not started |
+| Dashboard (pending work first) | Done (Expo + Next.js); sales online/offline split Done |
+| Inventory / categories CRUD | Done (Expo + Next.js) |
+| Theme editor + CMS | Done (Expo + Next.js) |
+| Orders pipeline (status) | Done (Expo + Next.js) |
+| Settings / margins | Done (Expo + Next.js) |
+| Customers list/detail | Done (Expo + Next.js) |
+| SIP plan templates CRUD | Done (Expo + Next.js) |
+| Staff CRUD (owner) | Done (Expo + Next.js) |
+| Gateway keys (encrypted) | Done (Expo + Next.js) |
+| Next.js dense admin (`admin/`) | Done (parity + POS/purchases/reports) |
+| Expo phone admin | Done (ops); POS/CSV web-first |
+| POS / offline sales | Done (Next.js) |
+| Purchases + weighted average cost | Done (Next.js) |
+| Reports CSV | Done (Next.js) |
+| R2 product images | **Done** (admin upload → R2 / MOCK_R2; storefront uses returned public URL) |
 | Domain list UI | Not started |
-| Staff ACL depth / GST fields full | Not started |
+| GST invoice PDF | **Done** (stub; no IRN) |
+
+**Next** (priority order): Live Checkout SDK → SIP Autopay → harden storefront → modularize API → platform console → R2/GST/KYC/domains → Play Store packaging.
 
 ---
 
@@ -78,13 +87,14 @@ Spec in `docs/`. Brand name / production hostname still placeholder.
 
 | Item | Status |
 |------|--------|
-| Catalog browse / filters / PDP | Done (Expo) |
+| Catalog browse / filters / PDP | Done (Expo) — search + multi-image |
 | Cart + address + **reserve** order | Done |
 | Guest order history | Done |
 | Wishlist (local) | Done |
-| Customer OTP scoped to Host | Not started |
-| Razorpay Model B checkout + webhooks | Not started |
-| Invoice PDF | Not started |
+| Customer OTP scoped to Host | **Done** (mock SMS / OTP_DEV_CODE) |
+| Razorpay Model B checkout + webhooks | **Done** (Test Mode + mock path) |
+| Invoice PDF | **Done** (stub; no IRN) |
+| Profile (Account tab) | **Done** |
 
 ---
 
@@ -98,7 +108,7 @@ Spec in `docs/`. Brand name / production hostname still placeholder.
 | Stale flag / last-known | Done |
 | Product live_price on detail/list | Done |
 | Full commodity checkout + lock TTL | Partial / pending |
-| Rate lock at paid order (gateway) | Pending (needs Razorpay) |
+| Rate lock at paid order (gateway) | **Done** (TTL on order create) |
 
 ---
 
@@ -109,9 +119,9 @@ Spec in `docs/`. Brand name / production hostname still placeholder.
 | Item | Status |
 |------|--------|
 | Plan list + guest enroll + mock pay + rate lock | Done |
-| Admin enrollments / due on dashboard | Done |
-| Gateway mandates / real debit | Not started |
-| Missed-payment SMS / KYC gate / liability report | Not started |
+| Admin enrollments / due on dashboard | Done (+ due/overdue filter) |
+| Gateway mandates / real debit | **Done** (UPI Autopay mock + live client; Test Mode checklist) |
+| Missed-payment SMS / KYC gate / liability report | SMS deferred; liability report Done |
 
 ---
 
@@ -138,14 +148,9 @@ TXT verify, Cloudflare for SaaS / SSL, primary hostname rules — schema in docs
 
 ## Pending backlog (execution order)
 
-1. **P0** Customer OTP (`+91`) + customer JWT; retire guest-only for checkout/SIP  
-2. **P0** Razorpay Model B; webhooks; lock TTL  
-3. **P1** Storefront harden (multi-image, search, SIP nudges)  
-4. **P1** Split FastAPI monolith; Redis when needed  
-5. **P2** Next.js jeweler admin (replace Expo interim)  
-6. **P2** Platform console + provisioning job  
-7. **P2** R2/MinIO, GST invoices, KYC, custom domains  
-8. **P3** Play Store white-label release pipeline  
+1. **P2** GST IRN / DNS verify for custom domains  
+2. **P3** Play Store per-tenant packaging  
+3. **Later** Redis (only if load needs it); Live SMS (MSG91)
 
 ---
 
@@ -166,8 +171,10 @@ TXT verify, Cloudflare for SaaS / SSL, primary hostname rules — schema in docs
 ```
 jweller-platform/          ← this monorepo
   docs/                    product spec + progress
-  backend/                 FastAPI (server.py monolith today)
-  frontend/                Expo customer + interim admin
+  backend/                 FastAPI (server.py + routers/)
+  frontend/                Expo customer + phone admin
+  admin/                   Next.js jeweler ERP
+  platform-admin/          Next.js platform console
   memory/PRD.md
   AGENTS.md
   .cursor/  .agents/

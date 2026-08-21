@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 
 import { getSipEnrollments } from "@/src/api/client";
-import { getGuestId } from "@/src/utils/guest";
+import { getCustomerToken } from "@/src/api/customerToken";
 import { useStore } from "@/src/theme/StoreProvider";
 
 export interface DueReminder {
@@ -26,8 +26,12 @@ export function SipRemindersProvider({ children }: { children: React.ReactNode }
 
   const refresh = useCallback(async () => {
     try {
-      const gid = await getGuestId();
-      const enrollments = await getSipEnrollments(code, gid);
+      if (!getCustomerToken()) {
+        setDueCount(0);
+        setNext(null);
+        return;
+      }
+      const enrollments = await getSipEnrollments(code);
       const now = Date.now();
       const due: DueReminder[] = [];
       for (const e of enrollments) {

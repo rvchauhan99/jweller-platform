@@ -5,7 +5,7 @@ alwaysApply: true
 
 # Frontend constitution
 
-Read [docs/FRONTEND.md](docs/FRONTEND.md) and [docs/PROGRESS.md](docs/PROGRESS.md) before any UI. Customer Expo app lives in `frontend/`; Next.js admin/console remain the dense ERP target.
+Read [docs/FRONTEND.md](docs/FRONTEND.md) and [docs/PROGRESS.md](docs/PROGRESS.md) before any UI. Customer Expo app lives in `frontend/`; jeweler admin is dual — Expo `frontend/app/admin/` (phone) and Next.js `admin/` (dense ERP).
 
 ## Three languages
 

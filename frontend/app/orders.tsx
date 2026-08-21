@@ -1,38 +1,49 @@
 import React, { useCallback, useState } from "react";
-import { ScrollView, StyleSheet, Text, View, Pressable } from "react-native";
+import { Alert, Platform, ScrollView, Share, StyleSheet, Text, View, Pressable } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Feather from "@expo/vector-icons/Feather";
 
-import { getOrders, Order } from "@/src/api/client";
+import { downloadOrderInvoice, getOrders, Order } from "@/src/api/client";
 import { useStore } from "@/src/theme/StoreProvider";
 import { formatMoney } from "@/src/theme/tokens";
-import { getGuestId } from "@/src/utils/guest";
 import { LoadingView, MessageView } from "@/src/components/StateViews";
+import { useCustomerAuth } from "@/src/context/CustomerAuthContext";
 
 export default function OrdersScreen() {
   const { justPlaced } = useLocalSearchParams<{ justPlaced?: string }>();
   const { code, theme } = useStore();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { token, ready, logout } = useCustomerAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
+    if (!token) {
+      setOrders([]);
+      setLoading(false);
+      return;
+    }
     try {
-      const gid = await getGuestId();
-      setOrders(await getOrders(code, gid));
+      setOrders(await getOrders(code));
     } catch {
       setOrders([]);
     } finally {
       setLoading(false);
     }
-  }, [code]);
+  }, [code, token]);
 
   useFocusEffect(
     useCallback(() => {
+      if (!ready) return;
+      if (!token) {
+        router.replace("/login?next=/orders");
+        return;
+      }
+      setLoading(true);
       load();
-    }, [load])
+    }, [load, ready, token, router])
   );
 
   const fmtDate = (iso: string) => {
@@ -43,28 +54,48 @@ export default function OrdersScreen() {
     }
   };
 
+  const handleInvoice = async (orderId: string) => {
+    try {
+      const { filename, base64 } = await downloadOrderInvoice(code, orderId);
+      const url = `data:application/pdf;base64,${base64}`;
+      if (Platform.OS === "web" && typeof document !== "undefined") {
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        a.click();
+        return;
+      }
+      await Share.share({ url, title: filename, message: filename });
+    } catch (e: any) {
+      Alert.alert("Invoice", e?.message ?? "Could not download invoice");
+    }
+  };
+
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.background }} testID="orders-screen">
       <View style={[styles.header, { paddingTop: insets.top + theme.spacing.sm, borderBottomColor: theme.colors.border }]}>
-        <Pressable testID="orders-back" onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))} hitSlop={12}>
+        <Pressable testID="orders-back" onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))} hitSlop={12} accessibilityRole="button" accessibilityLabel="Go back">
           <Feather name="chevron-left" size={26} color={theme.colors.headerText} />
         </Pressable>
-        <Text style={{ fontFamily: theme.fonts.heading, fontSize: theme.fontSize["2xl"], color: theme.colors.headerText, marginLeft: 8 }}>
-          My Reservations
+        <Text style={{ fontFamily: theme.fonts.heading, fontSize: theme.fontSize["2xl"], color: theme.colors.headerText, marginLeft: 8, flex: 1 }}>
+          My orders
         </Text>
+        <Pressable onPress={logout} hitSlop={8} accessibilityRole="button" accessibilityLabel="Sign out">
+          <Feather name="log-out" size={20} color={theme.colors.muted} />
+        </Pressable>
       </View>
 
       {loading ? (
         <LoadingView />
       ) : orders.length === 0 ? (
-        <MessageView testID="orders-empty" icon="clipboard" title="No reservations yet" subtitle="Pieces you reserve will appear here." actionLabel="Browse collections" onAction={() => router.replace("/collections")} />
+        <MessageView testID="orders-empty" icon="clipboard" title="No orders yet" subtitle="Pieces you buy will appear here." actionLabel="Browse collections" onAction={() => router.replace("/collections")} />
       ) : (
         <ScrollView contentContainerStyle={{ padding: theme.spacing.lg, paddingBottom: theme.spacing["3xl"] }} showsVerticalScrollIndicator={false}>
           {justPlaced ? (
             <View style={[styles.success, { borderColor: theme.colors.primary, backgroundColor: theme.colors.surface, borderRadius: theme.radius.lg }]} testID="order-success-banner">
               <Feather name="check-circle" size={18} color={theme.colors.primary} />
               <Text style={{ fontFamily: theme.fonts.body, color: theme.colors.text, fontSize: theme.fontSize.base, marginLeft: 8, flex: 1 }}>
-                Reservation placed — the store will call you to confirm.
+                Payment received — the store will prepare your order.
               </Text>
             </View>
           ) : null}
@@ -74,21 +105,30 @@ export default function OrdersScreen() {
               <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
                 <Text style={{ fontFamily: theme.fonts.bodyMedium, color: theme.colors.text, fontSize: theme.fontSize.base }}>{o.order_no}</Text>
                 <View style={[styles.status, { borderColor: theme.colors.primary }]}>
-                  <Text style={{ fontFamily: theme.fonts.bodyMedium, color: theme.colors.primary, fontSize: theme.fontSize.sm, textTransform: "capitalize" }}>{o.status}</Text>
+                  <Text style={{ fontFamily: theme.fonts.bodyMedium, color: theme.colors.primary, fontSize: theme.fontSize.sm, textTransform: "capitalize" }}>
+                    {o.payment_status === "paid" ? "paid" : o.status}
+                  </Text>
                 </View>
               </View>
               <Text style={{ fontFamily: theme.fonts.body, color: theme.colors.muted, fontSize: theme.fontSize.sm, marginTop: 2 }}>{fmtDate(o.created_at)}</Text>
-              <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: theme.colors.border, marginVertical: theme.spacing.md }} />
-              {o.items.map((it) => (
-                <View key={it.product_id} style={{ flexDirection: "row", justifyContent: "space-between", marginBottom: 4 }}>
-                  <Text style={{ fontFamily: theme.fonts.body, color: theme.colors.text, fontSize: theme.fontSize.sm, flex: 1 }} numberOfLines={1}>{it.name} × {it.qty}</Text>
-                  <Text style={{ fontFamily: theme.fonts.body, color: theme.colors.muted, fontSize: theme.fontSize.sm }}>{formatMoney(it.price * it.qty)}</Text>
-                </View>
-              ))}
-              <View style={{ flexDirection: "row", justifyContent: "space-between", marginTop: theme.spacing.sm }}>
-                <Text style={{ fontFamily: theme.fonts.bodyMedium, color: theme.colors.text, fontSize: theme.fontSize.base }}>Total</Text>
-                <Text style={{ fontFamily: theme.fonts.bodyMedium, color: theme.colors.secondary, fontSize: theme.fontSize.base }}>{formatMoney(o.subtotal)}</Text>
-              </View>
+              <Text style={{ fontFamily: theme.fonts.bodyMedium, color: theme.colors.text, fontSize: theme.fontSize.lg, marginTop: 8 }}>{formatMoney(o.subtotal)}</Text>
+              <Text style={{ fontFamily: theme.fonts.body, color: theme.colors.muted, fontSize: theme.fontSize.sm, marginTop: 4 }}>
+                {o.items?.length || 0} item(s)
+              </Text>
+              {o.payment_status === "paid" ? (
+                <Pressable
+                  testID={`order-invoice-${o.id}`}
+                  onPress={() => handleInvoice(o.id)}
+                  style={{ marginTop: 12, flexDirection: "row", alignItems: "center" }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Download invoice"
+                >
+                  <Feather name="download" size={16} color={theme.colors.primary} />
+                  <Text style={{ fontFamily: theme.fonts.bodyMedium, color: theme.colors.primary, marginLeft: 6, fontSize: 14 }}>
+                    Download invoice
+                  </Text>
+                </Pressable>
+              ) : null}
             </View>
           ))}
         </ScrollView>
@@ -98,8 +138,8 @@ export default function OrdersScreen() {
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 12, paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth },
-  success: { flexDirection: "row", alignItems: "center", padding: 14, borderWidth: 1, marginBottom: 16 },
-  card: { padding: 16, borderWidth: StyleSheet.hairlineWidth, marginBottom: 12 },
-  status: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3 },
+  header: { flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: 1 },
+  card: { borderWidth: 1, padding: 16, marginBottom: 12 },
+  status: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4 },
+  success: { flexDirection: "row", alignItems: "center", borderWidth: 1, padding: 14, marginBottom: 16 },
 });

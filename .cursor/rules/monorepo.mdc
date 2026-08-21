@@ -5,10 +5,11 @@ alwaysApply: true
 
 # Monorepo
 
-This repo is **jweller-platform**: product docs (`docs/`), FastAPI (`backend/`), Expo (`frontend/`), Cursor rules, and agent skills.
+This repo is **jweller-platform**: product docs (`docs/`), FastAPI (`backend/`), Expo (`frontend/`), Next.js jeweler admin (`admin/`), Cursor rules, and agent skills.
 
 - Prefer updating `docs/PROGRESS.md` (and related docs) when implementation behavior changes.
 - Do **not** modify MealHQ (`mealhq-api`, `Zorvia-main`).
 - Do **not** invent Model A payments, global customer SSO, or a multi-store customer app switcher.
 - Do **not** rebuild features already marked Done in PROGRESS unless asked.
+- Jeweler admin is **dual**: Expo phone ops + Next.js web ERP (POS/reports web-first). Do not deprecate Expo `/admin`.
 - Read [docs/PROGRESS.md](docs/PROGRESS.md) and [docs/FRONTEND.md](docs/FRONTEND.md) before UI work.

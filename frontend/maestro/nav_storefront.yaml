@@ -1,0 +1,9 @@
+appId: host.exp.Exponent
+---
+# Nav-only Maestro flow (Expo Go). Does NOT automate Razorpay WebView pay.
+# Run: maestro test frontend/maestro/nav_storefront.yaml
+# Adjust appId if using a custom/dev client.
+- launchApp
+- assertVisible: ".*"
+# Soft checks — labels depend on theme CMS; use when Expo is running with AURELIA bake
+- takeScreenshot: maestro_home

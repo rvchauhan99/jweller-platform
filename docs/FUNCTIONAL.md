@@ -11,50 +11,57 @@ Identity and theming rules in [AUTH_IDENTITY.md](./AUTH_IDENTITY.md) and [THEMIN
 
 | Actor | App today | Target |
 |-------|-----------|--------|
-| Shopper | Expo white-label customer app | Same APIs; OTP + paid checkout next |
-| Owner / staff | Interim Expo `/admin` + tenant_code | Next.js dense admin |
-| Platform operator | Seed only | Console: create tenant, billing, impersonate |
+| Shopper | Expo white-label customer app | OTP login + Razorpay pay (mock/dev-confirm locally) |
+| Owner / staff | **Dual:** Expo `/admin` (phone) + Next.js `admin/` (web ERP) | Same dual model; platform console separate |
+| Platform operator | Next.js `platform-admin/` | Create tenant, suspend/activate, domain list (DNS verify later) |
 
 ---
 
 ## Platform operator
 
-**Status: Not started** (demo tenants come from seed).
+**Status: Partial** — console shipped; demo seed still loads AURELIA/NOIR. Provisioning is **in-process** (no Redis worker).
 
-### Create tenant (target)
+### Create tenant (shipped)
 
-1. Enter business name, plan, tenant_code (or auto), subdomain.
-2. Optional custom domain (queued as `pending_dns`).
-3. **Theme panel:** preset, colors, fonts, layout, logo, homepage section order. Live preview.
-4. Owner username + temp password.
-5. Submit → `provisioning` → poll until `active`.
-6. Operator copies admin URL + tenant_code to the jeweler.
+1. Business name, plan, tenant_code, subdomain.
+2. Theme preset (+ optional color overrides).
+3. Owner username + password.
+4. Submit → in-process provision → `active` (job record for status).
+5. Operator shares admin URL + tenant_code with the jeweler.
 
-### Operate platform (target)
+Custom domain: add later on tenant detail (`pending_dns`; DNS verify later).
 
-- List tenants, filter by status/plan.
-- Suspend (storefront unavailable page; admin read-only + export still allowed).
-- View provisioning jobs and retry.
-- Impersonate with mandatory reason (audit).
-- SaaS billing status (software subscription), not gold settlements.
+### Operate platform
+
+- List tenants by status.
+- Suspend / activate (storefront 503 when suspended).
+- Domain list / add hostnames.
+- **Not this wave:** impersonate, SaaS billing UI, Redis caches, live SMS.
 
 ---
 
 ## Jeweler admin
 
-**Status: Partial** — interim Expo admin (`/admin/*`). Target: Next.js at `admin.yourplatform.in`.
+**Status: Partial** — dual clients on shared `/api/admin/*`.
 
-Login: tenant_code + username + password → JWT.
+- **Expo** (`frontend/app/admin/*`): phone ops — queue, inventory, orders, SIP, customers, staff, branding, settings, gateway.
+- **Next.js** (`admin/`): dense web ERP — same ops + **POS**, purchases/WAC, CSV reports.
 
-| Area | Shipped (Expo) | Still pending |
-|------|----------------|---------------|
-| Dashboard | Pending orders, SIP due, low stock, rate health, recent reservations | Full sales split online/offline |
-| Inventory | Products + categories CRUD | R2 images, HUID UX polish, branches UI |
-| Online orders | List + status advance | Refunds via gateway |
-| SIP | Enrollments list | Plan builder, liability report, mandates |
-| Branding / CMS | Theme + CMS editors | Domain list UI |
-| Settings | Business + rate margins | Gateway keys, staff CRUD, GST full |
-| POS / purchases / reports | — | Not started |
+Login (both): tenant_code + username + password → JWT (`aud: admin`). Web stores JWT in httpOnly cookie via BFF; Expo uses Bearer in secure storage.
+
+| Area | Expo | Next.js web | Still pending |
+|------|------|-------------|---------------|
+| Dashboard | Queue + sales split + rate health | Same | — |
+| Inventory | CRUD | Tables + CRUD | R2 images, HUID polish |
+| Online orders | List + status | Tables + status | Gateway refunds |
+| Customers | List + detail | List + detail | KYC |
+| SIP | Plans CRUD + enrollments | Same | Mandates, SMS |
+| Branding / CMS | Theme + CMS | Theme + CMS | Domain list UI |
+| Settings | Business + margins + gateway | Same | GST invoice PDF |
+| Staff | Owner CRUD | Owner CRUD | Fine-grained ACL |
+| POS / purchases / reports | Desktop CTA only | Full | — |
+
+Demo login: `AURELIA` / `owner` / `Aurelia@123`.
 
 ---
 
@@ -65,23 +72,22 @@ Login: tenant_code + username + password → JWT.
 ### Browse — Done
 
 - Home sections from theme + CMS (hero, rate ticker, categories, featured, about)
-- Catalog by category; filters: purity, price
-- Product detail with **live_price** when rates available
+- Catalog by category; search; filters: purity, price (server-backed)
+- Product detail with **live_price** + multi-image gallery
 
 ### Account — Partial
 
-- **Today:** guest device id; wishlist local; order + SIP lists by guest
-- **Next:** OTP with phone on **this** tenant only; same phone on another jeweler’s app = different account
+- **Today:** OTP (`+91` fixed prefix; user enters 10 digits) on **this** tenant only; testing banner + OTP `123456` via `dev_otp` (non-prod); customer JWT; Account profile edit + sign out; same phone on another jeweler’s app = different account
+- Wishlist still device-local
 
-### One-time purchase — Partial
-
-- **Today:** Cart → contact/address → **reserve** order (no payment)
-- **Next:** Pay on **this jeweler’s** Razorpay; commodity lock at place + re-validate if pay delayed ([RATES_SIP_PAYMENTS.md](./RATES_SIP_PAYMENTS.md))
+### Checkout / pay — Partial
+- **Today:** Authenticated checkout; Razorpay Test Mode Checkout + `pay/confirm`; GST stub invoice PDF; webhook; rate lock TTL
+- **Next:** Live Mode go-live; e-invoice IRN
 
 ### SIP purchase — Partial
-
-- **Today:** Choose plan → guest enroll → mock installment pay (rate lock)
-- **Next:** Mandate on jeweler’s gateway; OTP-backed enrollment; SMS due/missed
+- **Today:** Enroll (gold or silver) + monthly debit day → **compulsory first Razorpay installment**; UPI Autopay later; admin pause/resume/cancel; due desk
+- **Today:** One-time gold/silver buy → metal wallet grams
+- **Next:** Live SMS due/missed; KYC gate; redeem wallet against jewellery
 
 ### Unavailable tenant — Done
 
@@ -91,7 +97,7 @@ Suspended / unknown host → unavailable state (not a raw 500).
 
 ## Commodity / live rate
 
-**Status: Partial** — live feed + margins + stale + product live pricing shipped. Full commodity checkout / lock TTL with gateway still pending.
+**Status: Partial** — live feed + margins + stale + product live pricing + rate lock TTL on pay + **one-time metal wallet buy**.
 
 Details: [RATES_SIP_PAYMENTS.md](./RATES_SIP_PAYMENTS.md).
 
@@ -99,7 +105,7 @@ Details: [RATES_SIP_PAYMENTS.md](./RATES_SIP_PAYMENTS.md).
 
 ## Notifications (v1 scope)
 
-- OTP SMS — **pending** (needed with auth)
+- OTP SMS — **mock/log in non-prod**; live provider TBD (MSG91 recommended)
 - Order placed / shipped — pending
 - SIP due / missed — dashboard due flag shipped; SMS pending
 
@@ -117,8 +123,8 @@ Customer mobile is **one app per jeweler**, released under that jeweler’s bran
 |------|--------|
 | Build | Bake `EXPO_PUBLIC_TENANT_CODE` / `HOST` / `NAME` (+ icon/splash at release time) |
 | Tenancy | Public APIs + `X-Tenant-Host`; never client `tenant_id` |
-| Journeys | Browse, cart, reserve, guest SIP — OTP/pay next |
-| Identity | Same phone on two apps = two customers after OTP exists |
-| Admin | Target = shared **web** admin; Expo `/admin` is interim |
+| Journeys | Browse, cart, OTP, Razorpay pay, SIP enroll/installment pay |
+| Identity | Same phone on two apps = two customers |
+| Admin | Dual: Expo phone ops + Next.js dense ERP |
 
 Changing store means installing a **different** app, not a setting. Same FastAPI; no second tenancy model.

@@ -1,49 +1,77 @@
 # Operations
 
-**Last updated:** 2026-08-17  
-**Status:** Documentation. Runbooks for when the system exists. Nothing is deployed.
+**Last updated:** 2026-08-22  
+**Status:** Living runbook. Provisioning is **in-process** (no Redis worker this wave). Cloud Run Test Mode API shipped.
 
 ---
 
-## Provisioning worker
+## Cloud Run (Test Mode) — shipped
 
-Triggered by `POST /api/platform/tenants`. HTTP returns `{ tenant_id, status: "provisioning" }` immediately.
+| Item | Value |
+|------|--------|
+| Project | `zorvia-app` |
+| Region | `asia-south1` |
+| Service | `jweller-api` |
+| URL | `https://jweller-api-685896962185.asia-south1.run.app` |
+| Image | `asia-south1-docker.pkg.dev/zorvia-app/jweller/api:latest` |
+| Profile | Razorpay Test Mode (`MOCK_RAZORPAY=0`, `ALLOW_PAY_DEV_CONFIRM=0`) |
+| Data | Atlas Mongo — cloned from local `platform_registry` + registered `tenant_*` DBs |
+
+**Webhook (Razorpay Test Dashboard):**  
+`https://jweller-api-685896962185.asia-south1.run.app/api/public/webhooks/razorpay`
+
+**Smoke:** `GET /api/` → LuxeJewel; `GET /api/public/bootstrap` with `X-Tenant-Host: aurelia.luxejewel.app`.
+
+Container: [backend/Dockerfile](../backend/Dockerfile) + [backend/requirements.cloudrun.txt](../backend/requirements.cloudrun.txt). Never commit `.env` or Atlas URIs.
+
+---
+
+## Provisioning (Sprint 4 — shipped)
+
+Triggered by `POST /api/platform/tenants` from the platform console ([`platform-admin/`](../platform-admin/)).
+
+**v1 behavior:** HTTP runs an **idempotent in-process** provision (same seed shape as demo tenants). A `provisioning_jobs` document is written for status; there is **no Redis queue** and **no separate worker process**.
 
 ### Steps (idempotent)
 
-1. **Validate** tenant still `provisioning`; job `idempotency_key = provision:{tenant_id}`.
-2. **Seed tenant DB** — first write creates Mongo database `tenant_{CODE}`: categories, default SIP templates, `staff_profiles` for owner, `site_theme` from wizard, empty `site_cms` defaults, `rate_margins` zeros, `sequences`.
-3. **R2** — no bucket create in v1; prefix `{tenant_code}/` is logical. Upload logo from wizard temp storage if any.
-4. **Site row** — `tenant_sites` hostname `{subdomain}.yourplatform.in`, `kind=subdomain`, `status=active`, `is_primary=true` (or activate only when tenant activates — **decision: site row exists from insert; public resolver also requires tenant.status=active**).
-5. **Snapshot** — `theme_public_snapshots` + Redis `theme:` and `site:`.
-6. **Activate** — `tenants.status=active`.
-7. **Notify** — email owner with tenant_code, admin URL, temp password handling.
+1. Validate `tenant_code` / subdomain uniqueness; insert `tenants` with `status=provisioning`.
+2. Upsert `provisioning_jobs` with `idempotency_key = provision:{tenant_id}`.
+3. Seed tenant DB `tenant_{code}`: categories, products (starter), SIP plans, `site_theme` from wizard preset, `site_cms` defaults.
+4. Insert primary `tenant_sites` hostname `{subdomain}.luxejewel.app` (`kind=subdomain`, `status=active`).
+5. Upsert `theme_public_snapshots` (Mongo only — **no Redis** theme/site cache).
+6. Upsert owner in `tenant_admins`.
+7. Set `tenants.status=active`; mark job `done`.
 
-On failure: `provisioning_jobs.status=failed`, `retry_count++`, exponential backoff, alert platform operators. Tenant remains non-public.
+On failure: job `status=failed` + `error_log`; tenant may remain `provisioning` / non-public until fixed.
 
-Re-run must not duplicate categories if seed docs use stable slugs (`gold`, `silver`, `diamond`).
-
----
-
-## Local Phase 1 (locked)
-
-Docker Compose: Mongo, Redis, MinIO, API, worker. Next apps use `/api` rewrite. Storefront tenancy: `Host` or `X-Tenant-Host` (non-production only). MinIO bucket stands in for R2; same key prefix rules.
-
-## Wildcard DNS (after local Phase 1)
-
-- `*.yourplatform.in` → storefront (Cloudflare).
-- `admin`, `console`, `api` as separate records to the right apps (`api` for webhooks/workers; browsers still use same-origin `/api`).
-
-Custom domains: Phase 6 ([TENANT_SITES.md](./TENANT_SITES.md)).
+Platform operator seed: `PLATFORM_ADMIN_EMAIL` / `PLATFORM_ADMIN_PASSWORD` (defaults `ops@luxejewel.app` / `Platform@123`).
 
 ---
 
-## Tenant suspend (SaaS non-payment or abuse)
+## Local stack (current)
 
-- `tenants.status=suspended`.
-- Public Host: unavailable page (may still use theme snapshot).
-- Admin: **read-only** + export; no new orders, no POS, no SIP enroll.
-- Redis site cache invalidated.
+- Mongo + FastAPI (`backend/`).
+- Jeweler admin: Next.js `admin/` (cookie BFF).
+- Platform console: Next.js `platform-admin/` (port 3002 typical).
+- Expo storefront + phone admin: `frontend/`.
+- **Not required:** Redis, live SMS (MSG91), Docker Compose worker.
+
+R2: real `BUCKET_*` or `MOCK_R2=1`.
+
+## Wildcard DNS (later)
+
+- `*.luxejewel.app` → storefront.
+- Separate records for admin / console / api when deployed.
+
+Custom domains: add via platform console sites API; DNS verify **later** (`pending_dns` today).
+
+---
+
+## Tenant suspend
+
+- `POST /api/platform/tenants/{id}/suspend` → `tenants.status=suspended`.
+- Public Host / `X-Tenant-Host`: **503** Store temporarily unavailable (resolver requires `active`).
+- `activate` restores.
 
 ---
 
@@ -51,64 +79,30 @@ Custom domains: Phase 6 ([TENANT_SITES.md](./TENANT_SITES.md)).
 
 Trust feature, not an afterthought.
 
-- Export tenant Mongo (mongodump that DB) + R2 prefix zip (exclude nothing the jeweler legally owns; signed URL for KYC).
-- After confirmed offboard: `status=deleted`, disable sites, optional drop DB after retention window.
+- Export tenant Mongo (mongodump that DB) + R2 prefix zip.
+- After confirmed offboard: `status=deleted`, disable sites.
 
 ---
 
 ## Backup and restore
 
 - Cluster snapshots cover Registry + all tenant DBs.
-- **Single-tenant restore:** restore one database name onto a staging cluster, or mongodump/mongorestore `tenant_RAJ001` only. Test this before the first real incident.
-- Registry `tenant_sites` must stay consistent with restored DB (same `tenant_id`).
-
----
-
-## Schema / backfill at scale
-
-Mongo will not fail if a new field is missing. When old documents **must** be rewritten (e.g. rename, split collection):
-
-- Worker loops `tenants` where `status in (active, suspended)`.
-- Per-tenant backfill status in Registry (`schema_jobs`).
-- Default in Beanie for missing fields in the meantime.
+- **Single-tenant restore:** mongodump/mongorestore `tenant_*` only. Registry `tenant_sites` must stay consistent.
 
 ---
 
 ## Observability
 
-- Structured logs: `tenant_id`, `hostname`, `request_id`. Never log OTP or gateway secrets.
-- Metrics: provision success, OTP send, checkout, webhook verify fail, rate fetch age.
-- Alert: rate feed stale, provision stuck, webhook error rate.
+- Structured logs: `tenant_id`, `hostname`. Never log OTP or gateway secrets.
+- Metrics later: provision success, OTP send, checkout, webhook verify fail.
 
 ---
 
-## Edge cases (decided)
+## Explicitly deferred
 
-| Topic | Decision |
-|-------|----------|
-| Multi-branch | `branches` in tenant schema from v1; **UI hidden** until a jeweler needs it |
-| Inventory | Unique tagged jewellery **and** commodity/weight stock |
-| Making | Per product `amount` (₹) or `percent` of metal |
-| HUID | Optional on jewellery; not required to save or list online |
-| Checkout gateway | Razorpay only in v1 |
-| Rate-lock race | Mongo transaction on stock + order insert |
-| Feed down | Last-known + stale flag; default block commodity checkout |
-| Invoice numbers | Per-tenant, per FY sequence |
-| KYC for SIP | Configurable threshold; documents private R2 |
-| Admin on customer Host | Not supported; reserved hosts |
-| Localhost | `X-Tenant-Host` in non-production only |
-| Cross-tenant analytics | Batch job over tenant DBs; not a live join |
-
----
-
-## Secrets
-
-Never in git. When code exists: `.env` / secret manager for `MONGO_URI`, Redis, R2, JWT keys, SMS, rate-provider API, platform admin bootstrap.
-
-Tenant gateway keys: encrypted with a platform KEK in env, ciphertext in tenant DB.
-
----
-
-## MealHQ isolation
-
-Separate Mongo cluster (or at least separate Registry DB and never `tenant_*` name collisions with MealHQ). Separate Cloudflare account/bucket. Separate JWT secrets. No shared Firebase.
+| Item | Status |
+|------|--------|
+| Redis bootstrap / theme / site cache | Deferred — not needed at current load |
+| Live SMS MSG91 | Deferred — OTP testing UX remains |
+| Separate provisioning worker process | Deferred — in-process is enough |
+| Play Store per-tenant packaging | P3 backlog |

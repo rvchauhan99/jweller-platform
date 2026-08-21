@@ -1,7 +1,7 @@
 # Rates, SIP, and payments
 
-**Last updated:** 2026-08-17  
-**Status:** Documentation. Not implemented.
+**Last updated:** 2026-08-21  
+**Status:** Partially implemented (rates API, SIP enroll/pay/Autopay, one-time metal buy + wallet). Spec below remains the north star.
 
 ---
 

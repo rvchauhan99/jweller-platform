@@ -15,6 +15,7 @@ import { StoreProvider, useStore } from "@/src/theme/StoreProvider";
 import { CartProvider } from "@/src/context/CartContext";
 import { WishlistProvider } from "@/src/context/WishlistContext";
 import { SipRemindersProvider } from "@/src/context/SipRemindersContext";
+import { CustomerAuthProvider } from "@/src/context/CustomerAuthContext";
 
 LogBox.ignoreAllLogs(true);
 
@@ -44,14 +45,16 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <KeyboardProvider>
           <StoreProvider>
-            <WishlistProvider>
-              <CartProvider>
-                <SipRemindersProvider>
-                  <ThemedStatusBar />
-                  <Stack screenOptions={{ headerShown: false }} />
-                </SipRemindersProvider>
-              </CartProvider>
-            </WishlistProvider>
+            <CustomerAuthProvider>
+              <WishlistProvider>
+                <CartProvider>
+                  <SipRemindersProvider>
+                    <ThemedStatusBar />
+                    <Stack screenOptions={{ headerShown: false }} />
+                  </SipRemindersProvider>
+                </CartProvider>
+              </WishlistProvider>
+            </CustomerAuthProvider>
           </StoreProvider>
         </KeyboardProvider>
       </SafeAreaProvider>

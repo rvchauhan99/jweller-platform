@@ -18,15 +18,27 @@ Public tenant from `X-Tenant-Host` (or Host). Admin from JWT.
 | GET | `/api/public/bootstrap` | Theme snapshot + business |
 | GET | `/api/public/cms` | |
 | GET | `/api/public/categories` | |
-| GET | `/api/public/products` | Optional `category`, `featured` |
+| GET | `/api/public/products` | Optional `category`, `featured`, `q`, `purity`, `min_price`, `max_price`, `sort` |
 | GET | `/api/public/products/{id}` | Includes `live_price` / `pricing` when rates up |
 | GET | `/api/public/rates` | Feed + tenant margin + stale |
+| POST | `/api/public/auth/otp/request` | `{ phone }` +91; rate-limited |
+| POST | `/api/public/auth/otp/verify` | `{ phone, code }` → customer JWT |
+| GET | `/api/public/me` | Customer JWT |
+| PATCH | `/api/public/me` | Customer JWT — name/email |
 | GET | `/api/public/sip/plans` | |
-| POST | `/api/public/sip/enroll` | Guest |
-| GET | `/api/public/sip/enrollments` | By guest_id |
-| POST | `/api/public/sip/enrollments/{id}/pay` | Mock pay + rate lock |
-| POST | `/api/public/orders` | Reserve (no gateway) |
-| GET | `/api/public/orders` | By guest_id |
+| POST | `/api/public/sip/enroll` | Customer JWT |
+| GET | `/api/public/sip/enrollments` | Customer JWT |
+| POST | `/api/public/sip/enrollments/{id}/pay` | Create Razorpay order (mock/live) |
+| POST | `/api/public/sip/enrollments/{id}/pay/dev-confirm` | Local mock only (`ALLOW_PAY_DEV_CONFIRM=1`) |
+| POST | `/api/public/sip/enrollments/{id}/pay/confirm` | Checkout HMAC verify → mark installment paid |
+| POST | `/api/public/orders` | Customer JWT |
+| GET | `/api/public/orders` | Customer JWT |
+| GET | `/api/public/orders/{id}` | Customer JWT |
+| POST | `/api/public/orders/{id}/pay` | Create Razorpay order + rate lock TTL |
+| POST | `/api/public/orders/{id}/pay/dev-confirm` | Local mock only |
+| POST | `/api/public/orders/{id}/pay/confirm` | Checkout HMAC verify → mark paid |
+| GET | `/api/public/orders/{id}/invoice` | GST stub PDF (paid only) |
+| POST | `/api/public/webhooks/razorpay` | Signature + tenant notes; no Host |
 
 ### Admin (live)
 
@@ -39,12 +51,29 @@ Public tenant from `X-Tenant-Host` (or Host). Admin from JWT.
 | GET/POST/PUT/DELETE | `/api/admin/categories`, `/api/admin/categories/{id}` |
 | GET | `/api/admin/orders` |
 | PUT | `/api/admin/orders/{id}/status` |
-| GET | `/api/admin/sip/enrollments` |
+| POST | `/api/admin/uploads` | Multipart `file` → R2 product image; returns `{ key, url }` |
+| GET | `/api/admin/storage/status` | R2 configured / mock flag |
+| GET | `/api/public/media/{path}` | Serve MOCK_R2 objects only |
+| POST | `/api/public/sip/enrollments/{id}/mandate/setup` | Start UPI Autopay auth order |
+| POST | `/api/public/sip/enrollments/{id}/mandate/confirm` | Store token; first installment paid |
+| POST | `/api/public/sip/enrollments/{id}/mandate/dev-confirm` | Mock only |
+| POST | `/api/public/sip/enrollments/{id}/mandate/charge` | Recurring debit via token |
+| POST | `/api/admin/sip/enrollments/{id}/mandate/pause\|resume\|cancel\|charge` | Admin mandate ops |
+| GET/POST/PUT/DELETE | `/api/admin/sip/plans` |
 | GET/PUT | `/api/admin/theme` |
 | GET/PUT | `/api/admin/cms` |
 | GET/PUT | `/api/admin/settings` |
+| GET | `/api/admin/customers`, `/api/admin/customers/{id}` |
+| POST | `/api/admin/customers` |
+| GET/POST/PUT/DELETE | `/api/admin/staff` |
+| GET/PUT | `/api/admin/gateway` |
+| POST | `/api/admin/pos/sale` |
+| GET/POST | `/api/admin/purchases` |
+| GET | `/api/admin/reports/sales`, `/stock`, `/sip-liability` |
 
-**Not live yet:** OTP auth, `/api/platform/*`, payment webhooks, Redis-backed bootstrap.
+**Not live yet:** Redis-backed bootstrap, live SMS, DNS verify, Play packaging.
+
+Clients: Expo `frontend/app/admin` (Bearer), Next.js `admin/` (cookie BFF → Bearer), Next.js `platform-admin/` (cookie BFF → `/api/platform`).
 
 ---
 
@@ -136,25 +165,27 @@ All scoped to JWT tenant DB.
 | Gateways | `GET/PUT /api/admin/gateways` owner only |
 | Rate margins | `GET/PUT /api/admin/rate-margins` |
 | Staff | `/api/admin/staff` owner |
-| Uploads | `POST /api/admin/uploads` → signed R2 PUT under prefix |
+| Uploads | `POST /api/admin/uploads` multipart → R2 PutObject (QuickerPay-style `BUCKET_*`); returns public `url` |
 
 ---
 
-## Platform (JWT `aud=platform`)
+## Platform (JWT `aud=platform`) — **shipped**
 
 | Method | Path | Purpose |
 |--------|------|---------|
 | POST | `/api/platform/auth/login` | Super-admin |
+| GET | `/api/platform/me` | Session |
 | GET | `/api/platform/tenants` | List |
-| POST | `/api/platform/tenants` | Create: business, code, subdomain, **theme payload**, owner credentials |
-| GET | `/api/platform/tenants/{id}` | |
+| POST | `/api/platform/tenants` | Create (in-process provision; no Redis) |
+| GET | `/api/platform/tenants/{id}` | Detail + sites + job |
 | POST | `/api/platform/tenants/{id}/suspend` | |
 | POST | `/api/platform/tenants/{id}/activate` | |
-| GET | `/api/platform/tenants/{id}/jobs` | Provisioning |
-| POST | `/api/platform/tenants/{id}/impersonate` | `{ reason }` → short-lived admin JWT + audit |
-| GET/POST | `/api/platform/tenants/{id}/sites` | Operator-assisted domains |
+| GET | `/api/platform/tenants/{id}/jobs` | Provisioning job status |
+| GET/POST | `/api/platform/tenants/{id}/sites` | Domain list / add (`pending_dns` for custom) |
 
-Create-tenant body **must** include theme object matching [THEMING.md](./THEMING.md) (preset_id minimum; defaults fill the rest).
+**Not this wave:** impersonate, DNS verify, Redis cache.
+
+Create-tenant body includes theme `{ preset_id, colors? }` ([THEMING.md](./THEMING.md)).
 
 ---
 

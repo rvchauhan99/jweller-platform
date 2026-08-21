@@ -42,7 +42,7 @@ tenant's primary hostname is baked into the build and sent as X-Tenant-Host.
 - Backend tested: 29/29 pass, tenant isolation + guest scoping verified.
 
 ## Backlog / remaining (prioritized)
-- **P0:** Account/OTP auth (phone SMS or Emergent email) — needed to persist across devices &
+- **P0:** Account/OTP auth (phone SMS) — needed to persist across devices &
   gate checkout; then payment gateway (Razorpay/Cashfree per jeweler) for real online purchase.
 - **P1:** Product commodity pricing from live rate (weight × rate + making) on detail; SIP
   reminders; multiple product images/carousel; search.

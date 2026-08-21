@@ -157,35 +157,44 @@ class TestLivePricing:
 
 # --- Feature 3: SIP due reminders (backend contract) ------------------------
 class TestSipDueReminders:
-    def _enroll(self, host, plan_id="gold-11-1"):
-        guest_id = f"TEST_due_{uuid.uuid4().hex[:8]}"
+    def _login(self, host):
+        phone = f"93{uuid.uuid4().int % 10**8:08d}"
+        h = _h(host)
+        assert requests.post(f"{BASE_URL}/api/public/auth/otp/request", headers=h, json={"phone": phone}, timeout=15).status_code == 200
+        code = os.environ.get("OTP_DEV_CODE", "123456")
         r = requests.post(
-            f"{BASE_URL}/api/public/sip/enroll",
-            headers=_h(host),
-            json={"guest_id": guest_id, "plan_id": plan_id,
-                  "name": "TEST DueNudge", "phone": "9999911111"},
+            f"{BASE_URL}/api/public/auth/otp/verify",
+            headers=h,
+            json={"phone": phone, "code": code},
             timeout=15,
         )
         assert r.status_code == 200, r.text
-        return guest_id, r.json()
+        return r.json()["access_token"], phone
+
+    def _enroll(self, host, plan_id="gold-11-1", preferred_day=15):
+        token, phone = self._login(host)
+        r = requests.post(
+            f"{BASE_URL}/api/public/sip/enroll",
+            headers={**_h(host), "Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            json={"plan_id": plan_id, "name": "TEST DueNudge", "phone": phone, "preferred_day": preferred_day},
+            timeout=15,
+        )
+        assert r.status_code == 200, r.text
+        return token, r.json()
 
     def test_first_installment_is_due_now(self):
-        guest_id, e = self._enroll(AURELIA_HOST)
-        # Backend seeds first installment as 'due' with due_date = now.
+        token, e = self._enroll(AURELIA_HOST)
         first = e["installments"][0]
         assert first["status"] == "due"
         due_dt = _parse_iso(first["due_date"])
         now = datetime.now(timezone.utc)
-        # due_date should be <= now (within a small clock-skew allowance)
         assert (due_dt - now).total_seconds() <= 5, (
             f"first installment due_date {first['due_date']} should be <= now {now.isoformat()}"
         )
 
-        # And it should also come back via GET /enrollments for the same guest
         lst = requests.get(
             f"{BASE_URL}/api/public/sip/enrollments",
-            headers=_h(AURELIA_HOST),
-            params={"guest_id": guest_id},
+            headers={**_h(AURELIA_HOST), "Authorization": f"Bearer {token}"},
             timeout=15,
         ).json()
         assert len(lst) == 1
@@ -196,40 +205,39 @@ class TestSipDueReminders:
         assert len(due_insts) == 1, "expected exactly one immediately-due installment"
 
     def test_pay_shifts_due_to_future_no_longer_immediately_due(self):
-        guest_id, e = self._enroll(AURELIA_HOST)
-        r = requests.post(
+        token, e = self._enroll(AURELIA_HOST, preferred_day=15)
+        assert e.get("preferred_day") == 15
+        assert requests.post(
             f"{BASE_URL}/api/public/sip/enrollments/{e['id']}/pay",
-            headers=_h(AURELIA_HOST),
-            json={"guest_id": guest_id},
+            headers={**_h(AURELIA_HOST), "Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            json={},
+            timeout=15,
+        ).status_code == 200
+        r = requests.post(
+            f"{BASE_URL}/api/public/sip/enrollments/{e['id']}/pay/dev-confirm",
+            headers={**_h(AURELIA_HOST), "Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            json={},
             timeout=15,
         )
         assert r.status_code == 200, r.text
         paid = r.json()
         insts = paid["installments"]
 
-        # previously-due is now paid
         assert insts[0]["status"] == "paid"
         assert insts[0]["paid_at"] is not None
 
-        # the new due installment exists (index 2) and its due_date is in the FUTURE
         new_due = [i for i in insts if i["status"] == "due"]
         assert len(new_due) == 1, "expected exactly one due installment after pay"
         nd = new_due[0]
         assert nd["index"] == 2
         due_dt = _parse_iso(nd["due_date"])
         now = datetime.now(timezone.utc)
-        delta_days = (due_dt - now).total_seconds() / 86400.0
-        # ~30 days ahead (allow 25..35 for clock skew / rounding)
-        assert 25 < delta_days < 35, (
-            f"next due_date should be ~30 days ahead; got {delta_days:.2f} days"
-        )
+        assert due_dt > now, f"next due_date should be in the future; got {nd['due_date']}"
+        assert due_dt.day == 15, f"next due should fall on preferred_day 15; got day {due_dt.day}"
 
-        # Re-fetch via GET to confirm the same state — i.e. reminder logic on the
-        # frontend (status=='due' AND due_date<=now) would now yield zero nudges.
         lst = requests.get(
             f"{BASE_URL}/api/public/sip/enrollments",
-            headers=_h(AURELIA_HOST),
-            params={"guest_id": guest_id},
+            headers={**_h(AURELIA_HOST), "Authorization": f"Bearer {token}"},
             timeout=15,
         ).json()
         assert len(lst) == 1

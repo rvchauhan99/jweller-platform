@@ -61,7 +61,7 @@ Tenant branding applies to the **customer** surface via bootstrap theme tokens. 
 | Category / catalog | Pieces, not chrome | Open product |
 | Product | Image, weight, purity, making, live sell rate if commodity | Add to cart or start SIP |
 | Cart → address → pay | Total, jeweler identity, rate lock warning | Pay on tenant gateway |
-| Account / orders / SIP | Status of *this* shop only | View order / pay installment |
+| Account / orders / SIP | Status of *this* shop only | View order / pay installment / set up UPI Autopay |
 | OTP | Trust, this-site-only account | Request / verify OTP |
 
 ---
@@ -108,7 +108,7 @@ Metrics support those blocks. They are not the page.
 | Inventory | Find SKU | Edit stock / list online |
 | Online orders | Pipeline | Advance status |
 | Customers | Search this tenant only | Open ledger / KYC |
-| SIP | Who is due | Record / chase installment |
+| SIP | Who is due; Autopay pause/resume/cancel | Record / charge / chase installment |
 | Reports | GST / stock / SIP liability | Export CSV |
 | Branding | Match the live site | Save theme (invalidate snapshot) |
 
@@ -146,20 +146,22 @@ Metrics support those blocks. They are not the page.
 
 ## Stack
 
-| Layer | Customer (shipped) | Admin / console (target) |
-|-------|--------------------|---------------------------|
-| Framework | Expo 54 + expo-router | Next.js App Router |
-| Language | TypeScript | TypeScript |
-| Styling | Theme tokens from `/api/public/bootstrap` (StoreProvider) | Tailwind → CSS variables; shadcn/Radix |
-| Icons | Feather / Expo vector | Lucide |
-| Charts | — | Recharts only when operational |
-| Motion | Quiet; honor reduced motion | Almost none |
+| Layer | Customer (shipped) | Jeweler admin (shipped dual) | Platform console (target) |
+|-------|--------------------|------------------------------|---------------------------|
+| Framework | Expo 54 + expo-router | Expo `/admin` **and** Next.js `admin/` | Next.js App Router |
+| Language | TypeScript | TypeScript | TypeScript |
+| Styling | Theme tokens from `/api/public/bootstrap` | Platform tokens (`src/admin/theme.ts` / admin CSS vars) | Platform tokens |
+| Icons | Feather / Expo vector | Feather (Expo) / Lucide (web) | Lucide |
+| Charts | — | Recharts only when operational | Operational only |
+| Motion | Quiet; honor reduced motion | Almost none | Almost none |
 
-Do **not** merge customer chrome into admin. Interim Expo admin must still use **platform** tokens (`src/admin/theme.ts`), not the jeweler storefront preset.
+Do **not** merge customer chrome into admin. Both Expo and Next.js admin use **platform** tokens — not the jeweler storefront preset.
 
 **Locale:** English UI chrome only in v1.
 
-**API:** Expo calls FastAPI with `X-Tenant-Host`. Target Next apps use same-origin `/api` rewrite.
+**API:** Expo admin calls FastAPI with Bearer JWT (no Host tenancy). Next.js admin uses same-origin `/api` BFF that injects Bearer from httpOnly cookie.
+
+**Surface split:** POS, purchases, and heavy CSV reports are **web-first** (Next.js). Expo keeps queue/ops and shows a desktop CTA for those flows.
 
 ---
 

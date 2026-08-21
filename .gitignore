@@ -82,7 +82,11 @@ memory/test_credentials.md
 android-sdk/
 .env
 .env.*
+!.env.example
 *.env
 credentials.json
 *.key
 .credentials
+
+# Local mock R2 objects
+backend/.r2_mock/

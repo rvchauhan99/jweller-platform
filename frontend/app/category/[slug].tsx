@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { FlatList, Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -36,30 +36,22 @@ export default function CategoryScreen() {
     setLoading(true);
     setFailed(false);
     try {
-      setProducts(await getProducts(code, { category: slug }));
+      const purity = filter === "22K" || filter === "18K" ? filter : undefined;
+      const sort = filter === "priceLow" ? "price_asc" : filter === "priceHigh" ? "price_desc" : undefined;
+      setProducts(await getProducts(code, { category: slug, purity, sort }));
     } catch {
       setFailed(true);
     } finally {
       setLoading(false);
     }
-  }, [code, slug]);
+  }, [code, slug, filter]);
 
   useEffect(() => {
     load();
   }, [load]);
 
-  const title = useMemo(() => {
-    const s = String(slug ?? "");
-    return s.charAt(0).toUpperCase() + s.slice(1);
-  }, [slug]);
-
-  const filtered = useMemo(() => {
-    let list = [...products];
-    if (filter === "22K" || filter === "18K") list = list.filter((p) => p.purity === filter);
-    if (filter === "priceLow") list.sort((a, b) => a.price - b.price);
-    if (filter === "priceHigh") list.sort((a, b) => b.price - a.price);
-    return list;
-  }, [products, filter]);
+  const title = String(slug ?? "");
+  const titleNice = title.charAt(0).toUpperCase() + title.slice(1);
 
   const gap = theme.spacing.md;
   const cardW = (width - theme.spacing.lg * 2 - gap) / 2;
@@ -67,17 +59,18 @@ export default function CategoryScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.background }} testID="category-screen">
-      {/* Sticky header */}
       <View style={[styles.header, { paddingTop: insets.top + theme.spacing.sm, backgroundColor: theme.colors.headerBg, borderBottomColor: theme.colors.border }]}>
         <View style={styles.headerRow}>
-          <Pressable testID="category-back" onPress={() => router.back()} hitSlop={12}>
+          <Pressable testID="category-back" onPress={() => router.back()} hitSlop={12} accessibilityRole="button" accessibilityLabel="Go back">
             <Feather name="chevron-left" size={26} color={theme.colors.headerText} />
           </Pressable>
-          <Text style={{ fontFamily: theme.fonts.heading, fontSize: theme.fontSize["2xl"], color: theme.colors.headerText, marginLeft: theme.spacing.sm }}>
-            {title}
+          <Text style={{ fontFamily: theme.fonts.heading, fontSize: theme.fontSize["2xl"], color: theme.colors.headerText, marginLeft: theme.spacing.sm, flex: 1 }}>
+            {titleNice}
           </Text>
+          <Pressable testID="category-search" onPress={() => router.push("/search")} hitSlop={10} accessibilityRole="button" accessibilityLabel="Search">
+            <Feather name="search" size={20} color={theme.colors.headerText} />
+          </Pressable>
         </View>
-        {/* Filter chips */}
         <View style={{ height: headerH, justifyContent: "center" }}>
           <ScrollView
             horizontal
@@ -101,6 +94,8 @@ export default function CategoryScreen() {
                     borderColor: active ? theme.colors.primary : theme.colors.border,
                     backgroundColor: active ? theme.colors.primary : "transparent",
                   }}
+                  accessibilityRole="button"
+                  accessibilityLabel={f.label}
                 >
                   <Text
                     style={{
@@ -128,11 +123,11 @@ export default function CategoryScreen() {
         </View>
       ) : failed ? (
         <MessageView testID="category-error" icon="alert-triangle" title="Couldn't load collection" subtitle="Please check your connection and try again." actionLabel="Retry" onAction={load} />
-      ) : filtered.length === 0 ? (
-        <MessageView testID="category-empty" icon="feather" title="New pieces coming soon" subtitle="This collection is being curated. Please check back shortly." />
+      ) : products.length === 0 ? (
+        <MessageView testID="category-empty" icon="feather" title="No pieces match" subtitle="Try another purity or clear filters." />
       ) : (
         <FlatList
-          data={filtered}
+          data={products}
           keyExtractor={(p) => p.id}
           numColumns={2}
           columnWrapperStyle={{ gap }}

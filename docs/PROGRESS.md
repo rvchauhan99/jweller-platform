@@ -1,15 +1,17 @@
 # Implementation progress
 
-**Last updated:** 2026-08-21  
-**Status:** Living checklist for **this monorepo** (`jweller-platform`).
+**Last updated:** 2026-08-22  
+**Status:** Living checklist for **this monorepo** (`jweller-platform`). Cloud Run Test Mode API: see [OPERATIONS.md](./OPERATIONS.md).
 
 ## Where things live
 
 | Path | Role |
 |------|------|
 | [`docs/`](./) | Product docs, locks |
-| [`../backend/`](../backend/) | FastAPI + Motor (`server.py`) |
-| [`../frontend/`](../frontend/) | Expo white-label storefront + interim admin |
+| [`../backend/`](../backend/) | FastAPI + Motor (`server.py` + `routers/`) |
+| [`../frontend/`](../frontend/) | Expo white-label storefront + phone jeweler admin |
+| [`../admin/`](../admin/) | Next.js jeweler admin (dense ERP / web) |
+| [`../platform-admin/`](../platform-admin/) | Next.js platform console (create/suspend tenants) |
 | [`../memory/PRD.md`](../memory/PRD.md) | Prototype PRD notes |
 | GitHub | [rvchauhan99/jweller-platform](https://github.com/rvchauhan99/jweller-platform) |
 
@@ -19,18 +21,18 @@
 
 | Layer | Shipped today | Target (still locked) |
 |-------|---------------|------------------------|
-| Customer UI | Expo 54 + expo-router; tenant baked via `EXPO_PUBLIC_TENANT_CODE` / `HOST` / `NAME`; `X-Tenant-Host` on every call | Same APIs; optional Next.js web storefront later if needed |
-| Jeweler admin | **Interim** Expo routes under `frontend/app/admin/*` | Dense **Next.js** admin (`admin.yourplatform.in`) |
-| Platform console | Not built (seed creates demo tenants) | Next.js `platform-admin/` create-tenant wizard |
-| API | FastAPI monolith `backend/server.py` + Motor | Same FastAPI; modular routers; Beanie optional |
-| Cache / queue | None (in-process rate poller) | Redis site/theme cache + workers |
-| Files | Unsplash/CDN URLs in seed | R2 / MinIO prefixes |
-| Auth shopper | Guest `guest_id` only | `+91` OTP, per-tenant customer JWT |
-| Payments | Reserve orders (no gateway) | Razorpay Model B |
+| Customer UI | Expo 54 + expo-router; tenant baked via `EXPO_PUBLIC_TENANT_*`; `X-Tenant-Host` on every call | Same APIs; optional Next.js web storefront later if needed |
+| Jeweler admin | **Dual clients, one API:** Next.js `admin/` (web ERP) + Expo `frontend/app/admin/*` (phone ops) | Same; POS/reports stay web-first |
+| Platform console | **Next.js `platform-admin/`** create/suspend + domain list | Impersonation audit UI later |
+| API | FastAPI `server.py` + **`routers/`** (public, admin, platform, webhooks) + Motor | Beanie optional |
+| Cache / queue | None (in-process rate poller + **in-process provision**) | Redis **deferred** until multi-tenant load needs it |
+| Files | Unsplash/CDN URLs in seed; **R2 upload** for new gallery images (`BUCKET_*` / `MOCK_R2`) | Public CDN hostname via `BUCKET_PUBLIC_BASE_URL` |
+| Auth shopper | **`+91` OTP** + per-tenant customer JWT (`aud: customer`) | Unchanged |
+| Payments | **Razorpay Model B** Checkout + **SIP UPI Autopay** (mock + live client) | Live Mode go-live; production Autopay webhooks |
 | Tenancy | Host / `X-Tenant-Host` → Registry → tenant DB | Unchanged |
-| Tests | 36/36 pytest (storefront, rates/SIP/orders, live pricing) | Keep + expand |
+| Tests | pytest storefront / rates / SIP / orders / **OTP** / **Razorpay** | Keep + expand admin coverage |
 
-**Stance:** Expo is the shipped customer surface (Phase 7 pulled forward). Next.js admin + platform console remain the target ERP/control plane. Expo `/admin` is interim.
+**Stance:** Expo is the shipped customer surface. Jeweler admin is **dual**: Expo for phone queue/ops, Next.js for dense web ERP (POS, purchases, CSV). Do **not** deprecate Expo admin.
 
 Demo seed tenants: **AURELIA** (`aurelia.luxejewel.app`), **NOIR** (`noir.luxejewel.app`).
 
@@ -43,13 +45,13 @@ Legend: **Done** · **Partial** · **Not started**
 | Phase | Status | Notes |
 |-------|--------|-------|
 | 0 Docs | **Done** | Spec in this repo |
-| 1 Foundation | **Partial** | Registry + sites + admins + snapshots + Host resolve + admin JWT login. No Redis, no provisioning worker, no platform wizard (seed instead) |
-| 2 Core admin | **Partial** | Expo interim: dashboard, inventory CRUD, orders status, branding/CMS, settings, SIP list. No POS, WAC purchases, GST, R2 uploads, domain UI |
-| 3 Customer commerce | **Partial** | Catalog, cart, reserve checkout, guest order history. No OTP, no Razorpay, no invoice PDF |
-| 4 Rates / commodity | **Partial** | Live gold/silver poller + margins + stale + product `live_price`. Commodity-by-gram SKU path / checkout lock TTL not full |
-| 5 SIP | **Partial** | Plans, guest enroll, mock pay + rate lock, maturity fields, admin list. No gateway mandates, SMS, KYC gate, liability report |
-| 6 Custom domains | **Not started** | Schema-ready in docs only |
-| 7 Native white-label | **Partial** | Expo bake + no store switcher **Done**. Play Store per-brand packaging / listing pipeline **Not started** |
+| 1 Foundation | **Partial** | Registry + sites + admins + snapshots + Host resolve + admin JWT + **platform JWT + in-process provision**. No Redis (deferred). Demo seed still loads AURELIA/NOIR |
+| 2 Core admin | **Partial** | Dual admin + R2 gallery. **Platform domain list** (no DNS verify). GST stub Done |
+| 3 Customer commerce | **Partial** | Catalog, search, multi-image PDP, profile, cart, OTP, Razorpay Test Checkout, GST stub invoice |
+| 4 Rates / commodity | **Partial** | Live gold/silver + margins + rate lock TTL; **one-time metal buy → wallet** |
+| 5 SIP | **Partial** | Plans (gold/silver), enroll + **preferred_day** + **compulsory first Checkout**, UPI Autopay. KYC/SMS pending |
+| 6 Custom domains | **Partial** | Add host via platform console (`pending_dns`); DNS verify later |
+| 7 Native white-label | **Partial** | Expo bake + no store switcher **Done**. Play Store per-brand packaging **Not started** |
 
 ---
 
@@ -57,36 +59,63 @@ Legend: **Done** · **Partial** · **Not started**
 
 ### Tenancy / foundation
 - Host / `X-Tenant-Host` resolution; reserved-host guard; never client `tenant_id`
-- Registry: `tenants`, `tenant_sites`, `tenant_admins`, `theme_public_snapshots`
-- Per-tenant DBs: categories, products, `site_theme`, `site_cms`, SIP, orders
+- Registry: `tenants`, `tenant_sites`, `tenant_admins`, `theme_public_snapshots`, `platform_super_admins`, `provisioning_jobs`
+- Per-tenant DBs: categories, products, `site_theme`, `site_cms`, SIP, orders, customers, purchases
 - Idempotent seed of two branded tenants + theme snapshots
 - Admin login: `tenant_code` + username + password → JWT `aud: admin`
+- **Platform console:** JWT `aud: platform`; create/suspend/activate; sites list/add; in-process provision (**no Redis**)
+- Modular FastAPI: `server.py` + `routers/` (public, admin, platform, webhooks)
 - White-label: baked tenant; **no** in-app store switcher
 
 ### Storefront (Expo)
 - Bootstrap + theme tokens (no hardcoded brand colors on the UI path)
 - Home: hero, rate ticker, categories, featured, about
-- Collections, category filters, product detail
+- Collections, **search**, category filters, product detail (multi-image)
+- Account: profile edit / sign out / orders shortcut
 - Loading / empty / error / unavailable states
 - Wishlist (device-local)
-- Cart → **reserve** checkout (no payment)
-- Guest order history
+- Cart → checkout with **customer JWT** + Razorpay Checkout (Test Mode) / mock `dev-confirm` when `MOCK_RAZORPAY=1`
+- Order history (authenticated)
+
+### Customer auth
+- `POST /public/auth/otp/request|verify` (+91); `GET/PATCH /public/me`
+- Customer JWT `aud: customer` bound to Host tenant; same phone ≠ same account across tenants
+- SMS: `LogSmsProvider` in non-prod (`OTP_DEV_CODE` default `123456` + `dev_otp` on request); live SMS deferred
+- GST stub invoice PDF: `GET /public/orders/{id}/invoice` + admin download; Expo Download invoice
+- Admin dashboard `payment_health` (gateway enabled, mock flag, last paid)
+- Razorpay Test Mode runbook: [RAZORPAY_TEST_RUNBOOK.md](./RAZORPAY_TEST_RUNBOOK.md)
 
 ### Rates
 - Poller: gold-api.com + frankfurter.dev USD/INR
 - Per-tenant margin; 15 min stale; last-known fallback
 - Product `live_price` / `pricing` (weight × rate × purity + making)
+- Rate lock snapshot + TTL on Razorpay order create
 
-### SIP (guest)
-- Plans, enroll, list, mock installment pay with rate lock
-- Admin SIP enrollments + dashboard “SIP due”
+### SIP (customer JWT)
+- Plans, enroll (`preferred_day` 1–28), list; **first installment Checkout required at enroll**; later dues on preferred day
+- Installment pay via Razorpay order + webhook/dev-confirm (rate lock)
+- **UPI Autopay:** mandate setup/confirm/charge; admin pause/resume/cancel; fallback one-time Checkout
+- Admin SIP enrollments + plans CRUD + dashboard “SIP due”
+- One-time gold/silver buy: `POST /public/metal/buy` (+ confirm) → credits `metal_wallets`
+- Runbook: [RAZORPAY_AUTOPAY.md](./RAZORPAY_AUTOPAY.md)
 
-### Interim Expo admin
-- Queue-first dashboard (pending orders, SIP due, low stock, rate health)
-- Products / categories CRUD
-- Orders list + status
-- Theme + CMS editors
-- Settings (business / margins)
+### Payments (Razorpay Model B)
+- Tenant gateway keys (owner UI); encrypted secrets
+- `POST /public/orders/{id}/pay` (+ `/confirm`, `/dev-confirm`), SIP same, `POST /public/webhooks/razorpay`
+- Test Mode: `MOCK_RAZORPAY=0` + AURELIA `DEMO_RAZORPAY_*` / Admin gateway; Expo WebView Checkout
+- Pytest: API must run with `MOCK_RAZORPAY=1` — see [TESTING.md](./TESTING.md); MCP notes [RAZORPAY_MCP.md](./RAZORPAY_MCP.md)
+- Gate: [TESTING.md](./TESTING.md) — mock pytest mandatory after integrations
+
+### Expo jeweler admin (phone)
+- Queue-first dashboard (pending orders, SIP due, low stock, rate health, **today sales online/offline**)
+- Products / categories CRUD; orders status; theme + CMS; settings
+- Customers list/detail; SIP plans + enrollments; staff CRUD (owner); gateway keys (owner)
+- Desktop CTA for POS / purchases / CSV (web-only)
+
+### Next.js jeweler admin (`admin/`)
+- Cookie auth (`admin_token`) + `/api/auth/*` + `/api/admin/[...path]` BFF proxy to FastAPI
+- Dense ERP: Dashboard, POS, Orders, Inventory, Customers, Gold SIP, Purchases, Reports, Branding, Staff, Settings
+- Platform tokens (not storefront gold)
 
 ---
 
@@ -103,12 +132,23 @@ Base: `/api`. Public tenant from `X-Tenant-Host` (or Host). Admin from Bearer JW
 | GET | `/public/products` |
 | GET | `/public/products/{id}` |
 | GET | `/public/rates` |
+| POST | `/public/auth/otp/request` |
+| POST | `/public/auth/otp/verify` |
+| GET/PATCH | `/public/me` |
 | GET | `/public/sip/plans` |
 | POST | `/public/sip/enroll` |
 | GET | `/public/sip/enrollments` |
 | POST | `/public/sip/enrollments/{id}/pay` |
+| POST | `/public/sip/enrollments/{id}/pay/confirm` |
+| POST | `/public/sip/enrollments/{id}/pay/dev-confirm` |
 | POST | `/public/orders` |
 | GET | `/public/orders` |
+| GET | `/public/orders/{id}` |
+| POST | `/public/orders/{id}/pay` |
+| POST | `/public/orders/{id}/pay/confirm` |
+| POST | `/public/orders/{id}/pay/dev-confirm` |
+| GET | `/public/orders/{id}/invoice` |
+| POST | `/public/webhooks/razorpay` |
 
 ### Admin
 | Method | Path |
@@ -120,12 +160,21 @@ Base: `/api`. Public tenant from `X-Tenant-Host` (or Host). Admin from Bearer JW
 | GET/POST/PUT/DELETE | `/admin/categories`, `/admin/categories/{id}` |
 | GET | `/admin/orders` |
 | PUT | `/admin/orders/{id}/status` |
+| GET | `/admin/orders/{id}/invoice` |
 | GET | `/admin/sip/enrollments` |
+| GET/POST/PUT/DELETE | `/admin/sip/plans` |
 | GET/PUT | `/admin/theme` |
 | GET/PUT | `/admin/cms` |
 | GET/PUT | `/admin/settings` |
+| GET | `/admin/customers`, `/admin/customers/{id}` |
+| POST | `/admin/customers` |
+| GET/POST/PUT/DELETE | `/admin/staff` |
+| GET/PUT | `/admin/gateway` |
+| POST | `/admin/pos/sale` |
+| GET/POST | `/admin/purchases` |
+| GET | `/admin/reports/sales`, `/stock`, `/sip-liability` |
 
-**Not implemented:** `/api/public/auth/otp/*`, `/api/platform/*`, payment webhooks, Redis-backed bootstrap.
+**Not implemented:** Redis-backed bootstrap, live SMS provider, Play Store packaging, DNS verify.
 
 Full future contract: [API.md](./API.md).
 
@@ -133,25 +182,21 @@ Full future contract: [API.md](./API.md).
 
 ## Known demo shortcuts
 
-- Shopper identity = `guest_id` (device), not OTP customer
-- Checkout creates **reserve** orders; no Razorpay
-- SIP installment pay is **mock** (locks rate, no mandate)
-- Rate margins live on tenant document (not full `rate_margins` collection UX)
+- OTP uses `OTP_DEV_CODE` (default `123456`) + log SMS; Expo shows testing banner + OTP from `dev_otp`; login UI locks **+91** (user types 10 digits)
+- Razorpay Test Mode: real sandbox Checkout + `pay/confirm`; GST stub invoice PDF; pytest still uses mock
+- SIP: enroll + preferred debit day + compulsory first Checkout **or** later UPI Autopay; gold/silver UI filter; see [RAZORPAY_AUTOPAY.md](./RAZORPAY_AUTOPAY.md)
+- One-time metal buy credits customer metal wallet (gold/silver grams)
+- Rate margins live on tenant document
 - No Redis; theme/site always from Mongo
-- Product images = external URLs, not R2
-- Create tenant = seed script, not platform console
+- Product images = R2 via `POST /admin/uploads` (QuickerPay-style `BUCKET_*`); seed still Unsplash URLs; `MOCK_R2=1` for local/pytest
+- Create tenant = **platform console** (`platform-admin/`) or demo seed
 
 ---
 
 ## Pending backlog (priority)
 
-1. **P0** — Customer OTP (`+91`, Host-scoped); replace `guest_id` with customer session  
-2. **P0** — Razorpay Model B; webhooks; rate lock TTL on pay  
-3. **P1** — Storefront harden: multi-image, search, SIP due nudges; commodity path if needed  
-4. **P1** — Split FastAPI monolith into routers/models; add Redis when scaling  
-5. **P2** — Next.js jeweler admin (migrate off Expo `/admin`): tables, POS, reports  
-6. **P2** — Platform console: create-tenant wizard + provisioning job  
-7. **P2** — R2/MinIO, GST invoices, KYC, custom domains  
-8. **P3** — Play Store per-tenant `applicationId` / icon / listing pipeline  
+1. **P2** — GST IRN polish; more domain DNS verify  
+2. **P3** — Play Store per-tenant packaging  
+3. **Later** — Redis when multi-tenant load needs it; Live SMS (MSG91) — only when asked  
 
-Details and phase mapping: [BUILD_ORDER.md](./BUILD_ORDER.md).
+When a backlog item ships, move it to **Done** and update this date.

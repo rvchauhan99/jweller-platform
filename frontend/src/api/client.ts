@@ -1,10 +1,8 @@
 const BASE = process.env.EXPO_PUBLIC_BACKEND_URL;
 
 import { TENANT_HOST } from "@/src/config/tenant";
+import { getCustomerToken } from "@/src/api/customerToken";
 
-// Single baked tenant hostname per white-label build. The `code` argument is
-// kept for call-site compatibility but the resolved host is always the baked
-// tenant — the backend resolves it exactly like a real subdomain.
 export const hostForCode = (_code?: string) => TENANT_HOST;
 
 export class ApiError extends Error {
@@ -15,18 +13,52 @@ export class ApiError extends Error {
   }
 }
 
-export async function apiGet<T = any>(path: string, code: string): Promise<T> {
-  const res = await fetch(`${BASE}/api${path}`, {
-    headers: { "X-Tenant-Host": hostForCode(code), Accept: "application/json" },
-  });
-  if (!res.ok) {
-    let detail = `Request failed (${res.status})`;
-    try {
-      const body = await res.json();
-      detail = body?.detail ?? detail;
-    } catch {}
-    throw new ApiError(detail, res.status);
+type FetchOpts = { auth?: boolean };
+
+function headers(auth?: boolean): Record<string, string> {
+  const h: Record<string, string> = {
+    "X-Tenant-Host": hostForCode(),
+    Accept: "application/json",
+  };
+  if (auth) {
+    const t = getCustomerToken();
+    if (t) h.Authorization = `Bearer ${t}`;
   }
+  return h;
+}
+
+async function parseError(res: Response): Promise<string> {
+  let detail = `Request failed (${res.status})`;
+  try {
+    const body = await res.json();
+    detail = body?.detail ?? detail;
+  } catch {}
+  return detail;
+}
+
+export async function apiGet<T = any>(path: string, _code: string, opts: FetchOpts = {}): Promise<T> {
+  const res = await fetch(`${BASE}/api${path}`, { headers: headers(opts.auth) });
+  if (!res.ok) throw new ApiError(await parseError(res), res.status);
+  return res.json();
+}
+
+export async function apiPost<T = any>(path: string, _code: string, body: any, opts: FetchOpts = {}): Promise<T> {
+  const res = await fetch(`${BASE}/api${path}`, {
+    method: "POST",
+    headers: { ...headers(opts.auth), "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new ApiError(await parseError(res), res.status);
+  return res.json();
+}
+
+export async function apiPatch<T = any>(path: string, _code: string, body: any, opts: FetchOpts = {}): Promise<T> {
+  const res = await fetch(`${BASE}/api${path}`, {
+    method: "PATCH",
+    headers: { ...headers(opts.auth), "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new ApiError(await parseError(res), res.status);
   return res.json();
 }
 
@@ -72,34 +104,31 @@ export interface Category {
 }
 
 export const getCategories = (code: string) => apiGet<Category[]>("/public/categories", code);
-export const getProducts = (code: string, opts?: { category?: string; featured?: boolean }) => {
+export const getProducts = (
+  code: string,
+  opts?: {
+    category?: string;
+    featured?: boolean;
+    q?: string;
+    purity?: string;
+    min_price?: number;
+    max_price?: number;
+    sort?: "price_asc" | "price_desc";
+  }
+) => {
   const qs = new URLSearchParams();
   if (opts?.category) qs.set("category", opts.category);
   if (opts?.featured) qs.set("featured", "true");
+  if (opts?.q) qs.set("q", opts.q);
+  if (opts?.purity) qs.set("purity", opts.purity);
+  if (opts?.min_price != null) qs.set("min_price", String(opts.min_price));
+  if (opts?.max_price != null) qs.set("max_price", String(opts.max_price));
+  if (opts?.sort) qs.set("sort", opts.sort);
   const q = qs.toString();
   return apiGet<Product[]>(`/public/products${q ? `?${q}` : ""}`, code);
 };
-export async function apiPost<T = any>(path: string, code: string, body: any): Promise<T> {
-  const res = await fetch(`${BASE}/api${path}`, {
-    method: "POST",
-    headers: { "X-Tenant-Host": hostForCode(code), "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    let detail = `Request failed (${res.status})`;
-    try {
-      const b = await res.json();
-      detail = b?.detail ?? detail;
-    } catch {}
-    throw new ApiError(detail, res.status);
-  }
-  return res.json();
-}
+export const getProduct = (code: string, id: string) => apiGet<Product>(`/public/products/${id}`, code);
 
-export const getProduct = (code: string, id: string) =>
-  apiGet<Product>(`/public/products/${id}`, code);
-
-// ---- rates ----------------------------------------------------------------
 export interface MetalRate {
   metal: string;
   inr_per_gram: number;
@@ -115,7 +144,6 @@ export interface Rates {
 }
 export const getRates = (code: string) => apiGet<Rates>("/public/rates", code);
 
-// ---- SIP ------------------------------------------------------------------
 export interface SipPlan {
   id: string;
   name: string;
@@ -152,22 +180,105 @@ export interface SipEnrollment {
   monthly_amount: number;
   tenure_months: number;
   bonus_months: number;
+  preferred_day?: number;
   member_name: string;
   status: "active" | "matured";
   installments: SipInstallment[];
   summary: SipSummary;
+  mandate_status?: "none" | "pending" | "active" | "paused" | "cancelled" | "failed";
+  razorpay_token_id?: string | null;
 }
 export const getSipPlans = (code: string) => apiGet<SipPlan[]>("/public/sip/plans", code);
 export const sipEnroll = (
   code: string,
-  body: { guest_id: string; plan_id: string; monthly_amount?: number; name: string; phone: string }
-) => apiPost<SipEnrollment>("/public/sip/enroll", code, body);
-export const getSipEnrollments = (code: string, guestId: string) =>
-  apiGet<SipEnrollment[]>(`/public/sip/enrollments?guest_id=${encodeURIComponent(guestId)}`, code);
-export const sipPay = (code: string, enrollmentId: string, guestId: string) =>
-  apiPost<SipEnrollment>(`/public/sip/enrollments/${enrollmentId}/pay`, code, { guest_id: guestId });
+  body: { plan_id: string; monthly_amount?: number; name: string; phone?: string; preferred_day: number }
+) => apiPost<SipEnrollment>("/public/sip/enroll", code, body, { auth: true });
+export const getSipEnrollments = (code: string) =>
+  apiGet<SipEnrollment[]>("/public/sip/enrollments", code, { auth: true });
+export const sipPay = (code: string, enrollmentId: string) =>
+  apiPost<{ razorpay_order_id: string; key_id: string; amount: number; currency?: string; mock?: boolean }>(
+    `/public/sip/enrollments/${enrollmentId}/pay`,
+    code,
+    {},
+    { auth: true }
+  );
+export const sipPayDevConfirm = (code: string, enrollmentId: string) =>
+  apiPost<SipEnrollment>(`/public/sip/enrollments/${enrollmentId}/pay/dev-confirm`, code, {}, { auth: true });
+export const sipPayConfirm = (
+  code: string,
+  enrollmentId: string,
+  body: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }
+) => apiPost<SipEnrollment>(`/public/sip/enrollments/${enrollmentId}/pay/confirm`, code, body, { auth: true });
 
-// ---- orders ---------------------------------------------------------------
+export const sipMandateSetup = (code: string, enrollmentId: string) =>
+  apiPost<{
+    key_id: string;
+    razorpay_order_id: string;
+    amount: number;
+    currency?: string;
+    mock?: boolean;
+    mandate_status?: string;
+  }>(`/public/sip/enrollments/${enrollmentId}/mandate/setup`, code, {}, { auth: true });
+
+export const sipMandateDevConfirm = (code: string, enrollmentId: string) =>
+  apiPost<SipEnrollment>(`/public/sip/enrollments/${enrollmentId}/mandate/dev-confirm`, code, {}, { auth: true });
+
+export const sipMandateConfirm = (
+  code: string,
+  enrollmentId: string,
+  body: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }
+) => apiPost<SipEnrollment>(`/public/sip/enrollments/${enrollmentId}/mandate/confirm`, code, body, { auth: true });
+
+export const sipMandateCharge = (code: string, enrollmentId: string) =>
+  apiPost<SipEnrollment | { ok: boolean; status: string; message?: string }>(
+    `/public/sip/enrollments/${enrollmentId}/mandate/charge`,
+    code,
+    {},
+    { auth: true }
+  );
+
+export interface MetalWallet {
+  customer_id?: string;
+  gold_grams: number;
+  silver_grams: number;
+  updated_at?: string | null;
+}
+export const getMetalWallet = (code: string) =>
+  apiGet<MetalWallet>("/public/metal/wallet", code, { auth: true });
+export const metalBuy = (code: string, body: { metal: "gold" | "silver"; amount_inr: number }) =>
+  apiPost<{
+    purchase_id: string;
+    metal: string;
+    estimated_grams: number;
+    razorpay_order_id: string;
+    key_id: string;
+    amount: number;
+    currency?: string;
+    mock?: boolean;
+  }>("/public/metal/buy", code, body, { auth: true });
+export const metalBuyDevConfirm = (code: string, purchaseId: string) =>
+  apiPost<{ purchase: Record<string, unknown>; wallet: MetalWallet }>(
+    "/public/metal/buy/dev-confirm",
+    code,
+    { purchase_id: purchaseId },
+    { auth: true }
+  );
+export const metalBuyConfirm = (
+  code: string,
+  body: {
+    purchase_id: string;
+    razorpay_order_id: string;
+    razorpay_payment_id: string;
+    razorpay_signature: string;
+  }
+) =>
+  apiPost<{ purchase: Record<string, unknown>; wallet: MetalWallet }>(
+    "/public/metal/buy/confirm",
+    code,
+    body,
+    { auth: true }
+  );
+
 export interface OrderLine {
   product_id: string;
   name: string;
@@ -184,17 +295,60 @@ export interface Order {
   contact: { name: string; phone: string; email?: string };
   address: { line1: string; city: string; state?: string; pincode: string };
   status: string;
+  payment_status?: string;
   created_at: string;
 }
 export const createOrder = (
   code: string,
   body: {
-    guest_id: string;
     items: OrderLine[];
     contact: { name: string; phone: string; email?: string };
     address: { line1: string; city: string; state?: string; pincode: string };
     note?: string;
   }
-) => apiPost<Order>("/public/orders", code, body);
-export const getOrders = (code: string, guestId: string) =>
-  apiGet<Order[]>(`/public/orders?guest_id=${encodeURIComponent(guestId)}`, code);
+) => apiPost<Order>("/public/orders", code, body, { auth: true });
+export const getOrders = (code: string) => apiGet<Order[]>("/public/orders", code, { auth: true });
+export const getOrder = (code: string, id: string) => apiGet<Order>(`/public/orders/${id}`, code, { auth: true });
+export const orderPay = (code: string, orderId: string) =>
+  apiPost<{ razorpay_order_id: string; key_id: string; amount: number; currency?: string; mock?: boolean; rate_locked?: number }>(
+    `/public/orders/${orderId}/pay`,
+    code,
+    {},
+    { auth: true }
+  );
+export const orderPayDevConfirm = (code: string, orderId: string) =>
+  apiPost<Order>(`/public/orders/${orderId}/pay/dev-confirm`, code, {}, { auth: true });
+export const orderPayConfirm = (
+  code: string,
+  orderId: string,
+  body: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }
+) => apiPost<Order>(`/public/orders/${orderId}/pay/confirm`, code, body, { auth: true });
+
+export async function downloadOrderInvoice(code: string, orderId: string): Promise<{ filename: string; base64: string }> {
+  const BASE = process.env.EXPO_PUBLIC_BACKEND_URL;
+  const { getCustomerToken } = await import("@/src/api/customerToken");
+  const t = getCustomerToken();
+  const res = await fetch(`${BASE}/api/public/orders/${orderId}/invoice`, {
+    headers: {
+      "X-Tenant-Host": hostForCode(code),
+      Accept: "application/pdf",
+      ...(t ? { Authorization: `Bearer ${t}` } : {}),
+    },
+  });
+  if (!res.ok) {
+    let detail = `Invoice failed (${res.status})`;
+    try {
+      const body = await res.json();
+      detail = body?.detail ?? detail;
+    } catch {}
+    throw new ApiError(detail, res.status);
+  }
+  const buf = await res.arrayBuffer();
+  const bytes = new Uint8Array(buf);
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  const base64 = typeof btoa !== "undefined" ? btoa(binary) : Buffer.from(bytes).toString("base64");
+  const disp = res.headers.get("Content-Disposition") || "";
+  const m = /filename="?([^"]+)"?/.exec(disp);
+  return { filename: m?.[1] || `${orderId}.pdf`, base64 };
+}
