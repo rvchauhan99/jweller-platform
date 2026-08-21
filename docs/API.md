@@ -37,7 +37,7 @@ Public tenant from `X-Tenant-Host` (or Host). Admin from JWT.
 | POST | `/api/public/orders/{id}/pay` | Create Razorpay order + rate lock TTL |
 | POST | `/api/public/orders/{id}/pay/dev-confirm` | Local mock only |
 | POST | `/api/public/orders/{id}/pay/confirm` | Checkout HMAC verify → mark paid |
-| GET | `/api/public/orders/{id}/invoice` | GST stub PDF (paid only) |
+| GET | `/api/public/orders/{id}/invoice` | Jeweler tax invoice PDF (paid only; no IRN) |
 | POST | `/api/public/webhooks/razorpay` | Signature + tenant notes; no Host |
 
 ### Admin (live)

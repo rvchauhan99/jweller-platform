@@ -46,8 +46,8 @@ Legend: **Done** · **Partial** · **Not started**
 |-------|--------|-------|
 | 0 Docs | **Done** | Spec in this repo |
 | 1 Foundation | **Partial** | Registry + sites + admins + snapshots + Host resolve + admin JWT + **platform JWT + in-process provision**. No Redis (deferred). Demo seed still loads AURELIA/NOIR |
-| 2 Core admin | **Partial** | Dual admin + R2 gallery. **Platform domain list** (no DNS verify). GST stub Done |
-| 3 Customer commerce | **Partial** | Catalog, search, multi-image PDP, profile, cart, OTP, Razorpay Test Checkout, GST stub invoice |
+| 2 Core admin | **Partial** | Dual admin + R2 gallery. **Platform domain list** (no DNS verify). Jeweler tax invoice PDF Done (no IRN) |
+| 3 Customer commerce | **Partial** | Catalog, search, multi-image PDP, profile, cart, OTP, Razorpay Test Checkout, jeweler tax invoice PDF |
 | 4 Rates / commodity | **Partial** | Live gold/silver + margins + rate lock TTL; **one-time metal buy → wallet** |
 | 5 SIP | **Partial** | Plans (gold/silver), enroll + **preferred_day** + **compulsory first Checkout**, UPI Autopay. KYC/SMS pending |
 | 6 Custom domains | **Partial** | Add host via platform console (`pending_dns`); DNS verify later |
@@ -81,7 +81,7 @@ Legend: **Done** · **Partial** · **Not started**
 - `POST /public/auth/otp/request|verify` (+91); `GET/PATCH /public/me`
 - Customer JWT `aud: customer` bound to Host tenant; same phone ≠ same account across tenants
 - SMS: `LogSmsProvider` in non-prod (`OTP_DEV_CODE` default `123456` + `dev_otp` on request); live SMS deferred
-- GST stub invoice PDF: `GET /public/orders/{id}/invoice` + admin download; Expo Download invoice
+- Jeweler tax invoice PDF (ReportLab): weight/purity/making/HSN + GST 3% breakup; `GET /public/orders/{id}/invoice` + admin BFF binary proxy; Expo file write + share
 - Admin dashboard `payment_health` (gateway enabled, mock flag, last paid)
 - Razorpay Test Mode runbook: [RAZORPAY_TEST_RUNBOOK.md](./RAZORPAY_TEST_RUNBOOK.md)
 
@@ -183,7 +183,7 @@ Full future contract: [API.md](./API.md).
 ## Known demo shortcuts
 
 - OTP uses `OTP_DEV_CODE` (default `123456`) + log SMS; Expo shows testing banner + OTP from `dev_otp`; login UI locks **+91** (user types 10 digits)
-- Razorpay Test Mode: real sandbox Checkout + `pay/confirm`; GST stub invoice PDF; pytest still uses mock
+- Razorpay Test Mode: real sandbox Checkout + `pay/confirm`; jeweler tax invoice PDF; pytest still uses mock
 - SIP: enroll + preferred debit day + compulsory first Checkout **or** later UPI Autopay; gold/silver UI filter; see [RAZORPAY_AUTOPAY.md](./RAZORPAY_AUTOPAY.md)
 - One-time metal buy credits customer metal wallet (gold/silver grams)
 - Rate margins live on tenant document

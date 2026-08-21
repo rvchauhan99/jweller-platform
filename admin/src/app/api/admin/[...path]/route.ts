@@ -38,11 +38,24 @@ const proxy = async (request: NextRequest, pathSegments: string[]) => {
   }
 
   const res = await fetch(url, { method, headers, body, cache: "no-store" })
-  const resText = await res.text()
+  const resCt = res.headers.get("content-type") || ""
   const outHeaders = new Headers()
-  const resCt = res.headers.get("content-type")
   if (resCt) outHeaders.set("content-type", resCt)
 
+  const isBinary =
+    resCt.includes("application/pdf") ||
+    resCt.includes("application/octet-stream") ||
+    resCt.includes("image/") ||
+    resCt.includes("multipart/")
+
+  if (isBinary) {
+    const buf = await res.arrayBuffer()
+    const disp = res.headers.get("content-disposition")
+    if (disp) outHeaders.set("content-disposition", disp)
+    return new NextResponse(buf, { status: res.status, headers: outHeaders })
+  }
+
+  const resText = await res.text()
   return new NextResponse(resText, { status: res.status, headers: outHeaders })
 }
 

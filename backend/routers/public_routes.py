@@ -539,18 +539,42 @@ class OrderIn(BaseModel):
     note: Optional[str] = None
 
 
+async def _products_by_ids(db, product_ids: list) -> dict:
+    ids = [str(x) for x in product_ids if x]
+    if not ids:
+        return {}
+    rows = await db.products.find({"id": {"$in": ids}}).to_list(len(ids))
+    return {str(r.get("id")): r for r in rows}
+
+
+async def _invoice_pdf_for_order(*, db, tenant: dict, order: dict) -> bytes:
+    ids = [it.get("product_id") for it in (order.get("items") or [])]
+    products = await _products_by_ids(db, ids)
+    return inv_pdf.build_tax_invoice_pdf(tenant=tenant, order=order, products_by_id=products)
+
+
 @router.post("/public/orders")
 async def create_order(body: OrderIn, cctx=Depends(get_customer_ctx)):
     if not body.items:
         raise HTTPException(status_code=400, detail="Cart is empty")
     subtotal = sum(i.price * i.qty for i in body.items)
+    products = await _products_by_ids(cctx["db"], [i.product_id for i in body.items])
+    items = []
+    for i in body.items:
+        row = i.model_dump()
+        prod = products.get(str(i.product_id)) or {}
+        if prod:
+            row.update(inv_pdf.snapshot_fields_from_product(prod))
+        else:
+            row.setdefault("hsn", inv_pdf.DEFAULT_HSN)
+        items.append(row)
     order = {
         "id": str(uuid.uuid4()),
         "order_no": "RSV-" + datetime.now(timezone.utc).strftime("%y%m%d") + "-" + uuid.uuid4().hex[:5].upper(),
         "customer_id": cctx["customer_id"],
         "guest_id": None,
         "channel": "online",
-        "items": [i.model_dump() for i in body.items],
+        "items": items,
         "subtotal": round(subtotal, 2),
         "currency": "₹",
         "contact": body.contact.model_dump(),
@@ -590,8 +614,7 @@ async def get_order_invoice(order_id: str, cctx=Depends(get_customer_ctx)):
         raise HTTPException(status_code=404, detail="Order not found")
     if o.get("payment_status") != "paid":
         raise HTTPException(status_code=400, detail="Invoice available after payment")
-    lines = inv_pdf.invoice_lines_for_order(tenant=cctx["tenant"], order=o)
-    pdf = inv_pdf.build_simple_pdf(lines, title="Tax Invoice (stub)")
+    pdf = await _invoice_pdf_for_order(db=cctx["db"], tenant=cctx["tenant"], order=o)
     filename = f"{o.get('invoice_no') or o.get('order_no') or order_id}.pdf"
     return Response(
         content=pdf,

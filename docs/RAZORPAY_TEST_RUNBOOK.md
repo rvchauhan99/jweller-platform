@@ -22,7 +22,7 @@ Production must set `APP_ENV=production` so fixed OTP and `dev_otp` are never re
 1. Add product → Checkout → Pay.
 2. Razorpay Checkout opens (WebView). Use test card e.g. `4111 1111 1111 1111`.
 3. App calls `POST /api/public/orders/{id}/pay/confirm` (HMAC). Order becomes `payment_status=paid`.
-4. Orders → **Download invoice** (GST stub PDF).
+4. Orders → **Download invoice** (jeweler tax invoice PDF).
 
 ## SIP installment
 

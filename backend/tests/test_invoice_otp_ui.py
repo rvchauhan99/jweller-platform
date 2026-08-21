@@ -1,4 +1,4 @@
-"""Invoice PDF stub + OTP dev_otp + pay/confirm invoice_no."""
+"""Jeweler tax invoice PDF + OTP dev_otp + pay/confirm invoice_no."""
 from __future__ import annotations
 
 import os
@@ -9,7 +9,12 @@ from pathlib import Path
 import requests
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from invoice_pdf import build_simple_pdf
+from invoice_pdf import (
+    build_simple_pdf,
+    build_tax_invoice_pdf,
+    enrich_line,
+    gst_breakup,
+)
 from payments_razorpay import payment_signature_for_tests
 
 from conftest import AURELIA_HOST, OTP_DEV_CODE, tenant_headers
@@ -39,6 +44,68 @@ class TestInvoiceAndDevOtp:
     def test_pdf_builder_produces_pdf_header(self):
         pdf = build_simple_pdf(["Line one", "Line two"], title="Tax Invoice")
         assert pdf.startswith(b"%PDF")
+        assert len(pdf) > 800
+
+    def test_tax_invoice_includes_jeweler_fields(self):
+        pdf = build_tax_invoice_pdf(
+            tenant={
+                "business_name": "Aurelia Fine Jewels",
+                "gstin": "27AAAAA0000A1Z5",
+                "state": "Maharashtra",
+                "invoice_prefix": "AUR",
+            },
+            order={
+                "invoice_no": "AUR-RSV-1",
+                "order_no": "RSV-1",
+                "subtotal": 10300.0,
+                "paid_at": "2026-08-22T10:00:00+00:00",
+                "payment_status": "paid",
+                "gateway_payment_id": "pay_test",
+                "items": [
+                    {
+                        "product_id": "p1",
+                        "name": "Solitaire Halo Ring",
+                        "price": 10300.0,
+                        "qty": 1,
+                        "weight_grams": 4.2,
+                        "purity": "22K",
+                        "making_charge": 12500,
+                        "making_charge_type": "flat",
+                        "hsn": "7113",
+                    }
+                ],
+                "contact": {"name": "Priya Sharma", "phone": "9876543210"},
+                "address": {
+                    "line1": "12 Marine Drive",
+                    "city": "Mumbai",
+                    "state": "Maharashtra",
+                    "pincode": "400001",
+                },
+            },
+        )
+        assert pdf.startswith(b"%PDF")
+        assert len(pdf) > 1500
+        # Uncompressed content streams / metadata often embed these strings
+        assert b"TAX INVOICE" in pdf or b"Taxable" in pdf or b"/Type /Page" in pdf
+
+    def test_gst_breakup_intra_and_inter(self):
+        intra = gst_breakup(grand_total=10300, bill_state="Maharashtra", seller_state="Maharashtra")
+        assert intra["mode"] == "cgst_sgst"
+        assert abs(intra["taxable"] + intra["tax"] - 10300) < 0.02
+        assert abs(intra["cgst"] + intra["sgst"] - intra["tax"]) < 0.02
+        inter = gst_breakup(grand_total=10300, bill_state="Karnataka", seller_state="Maharashtra")
+        assert inter["mode"] == "igst"
+        assert inter["igst"] == inter["tax"]
+        assert inter["cgst"] == 0
+
+    def test_enrich_line_from_product(self):
+        line = enrich_line(
+            {"product_id": "p1", "name": "Ring", "price": 1000, "qty": 1},
+            {"weight_grams": 3.5, "purity": "18K", "making_charge": 500, "hsn": "7113"},
+        )
+        assert line["weight_grams"] == 3.5
+        assert line["purity"] == "18K"
+        assert line["hsn"] == "7113"
 
     def test_otp_request_returns_dev_otp(self):
         phone = f"96{uuid.uuid4().int % 10**8:08d}"
@@ -62,10 +129,18 @@ class TestInvoiceAndDevOtp:
             json={
                 "items": [{"product_id": p["id"], "name": p["name"], "price": price, "qty": 1}],
                 "contact": {"name": "Inv", "phone": phone},
-                "address": {"line1": "1", "city": "Mumbai", "pincode": "400001"},
+                "address": {
+                    "line1": "1",
+                    "city": "Mumbai",
+                    "state": "Maharashtra",
+                    "pincode": "400001",
+                },
             },
             timeout=15,
         ).json()
+        # Snapshot jewellery fields onto the line at create time
+        item0 = (order.get("items") or [{}])[0]
+        assert item0.get("weight_grams") is not None or p.get("weight_grams") is not None
         pay = requests.post(
             f"{BASE_URL}/api/public/orders/{order['id']}/pay",
             headers=tenant_headers(AURELIA_HOST, token),
@@ -98,3 +173,5 @@ class TestInvoiceAndDevOtp:
         assert inv.status_code == 200
         assert inv.headers.get("content-type", "").startswith("application/pdf")
         assert inv.content.startswith(b"%PDF")
+        assert len(inv.content) > 1500
+        assert "attachment" in (inv.headers.get("content-disposition") or "").lower()

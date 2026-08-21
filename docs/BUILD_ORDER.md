@@ -75,7 +75,7 @@ Spec in `docs/`. Brand name / production hostname still placeholder.
 | Reports CSV | Done (Next.js) |
 | R2 product images | **Done** (admin upload → R2 / MOCK_R2; storefront uses returned public URL) |
 | Domain list UI | Not started |
-| GST invoice PDF | **Done** (stub; no IRN) |
+| GST invoice PDF | **Done** (jeweler tax invoice; no IRN) |
 
 **Next** (priority order): Live Checkout SDK → SIP Autopay → harden storefront → modularize API → platform console → R2/GST/KYC/domains → Play Store packaging.
 
@@ -93,7 +93,7 @@ Spec in `docs/`. Brand name / production hostname still placeholder.
 | Wishlist (local) | Done |
 | Customer OTP scoped to Host | **Done** (mock SMS / OTP_DEV_CODE) |
 | Razorpay Model B checkout + webhooks | **Done** (Test Mode + mock path) |
-| Invoice PDF | **Done** (stub; no IRN) |
+| Invoice PDF | **Done** (jeweler tax invoice; no IRN) |
 | Profile (Account tab) | **Done** |
 
 ---

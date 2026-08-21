@@ -298,8 +298,12 @@ async def admin_order_invoice(oid: str, ctx=Depends(get_admin_ctx)):
         raise HTTPException(status_code=404, detail="Order not found")
     if o.get("payment_status") != "paid":
         raise HTTPException(status_code=400, detail="Invoice available after payment")
-    lines = inv_pdf.invoice_lines_for_order(tenant=ctx["tenant"], order=o)
-    pdf = inv_pdf.build_simple_pdf(lines, title="Tax Invoice (stub)")
+    ids = [it.get("product_id") for it in (o.get("items") or [])]
+    products = {}
+    if ids:
+        rows = await ctx["db"].products.find({"id": {"$in": [str(x) for x in ids if x]}}).to_list(len(ids))
+        products = {str(r.get("id")): r for r in rows}
+    pdf = inv_pdf.build_tax_invoice_pdf(tenant=ctx["tenant"], order=o, products_by_id=products)
     filename = f"{o.get('invoice_no') or o.get('order_no') or oid}.pdf"
     return Response(
         content=pdf,

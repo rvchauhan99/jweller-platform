@@ -1,8 +1,10 @@
 import React, { useCallback, useState } from "react";
-import { Alert, Platform, ScrollView, Share, StyleSheet, Text, View, Pressable } from "react-native";
+import { Alert, Platform, ScrollView, StyleSheet, Text, View, Pressable } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Feather from "@expo/vector-icons/Feather";
+import * as FileSystem from "expo-file-system/legacy";
+import * as Sharing from "expo-sharing";
 
 import { downloadOrderInvoice, getOrders, Order } from "@/src/api/client";
 import { useStore } from "@/src/theme/StoreProvider";
@@ -57,15 +59,33 @@ export default function OrdersScreen() {
   const handleInvoice = async (orderId: string) => {
     try {
       const { filename, base64 } = await downloadOrderInvoice(code, orderId);
-      const url = `data:application/pdf;base64,${base64}`;
+      const safeName = (filename || `${orderId}.pdf`).replace(/[^\w.\-]+/g, "_");
       if (Platform.OS === "web" && typeof document !== "undefined") {
+        const url = `data:application/pdf;base64,${base64}`;
         const a = document.createElement("a");
         a.href = url;
-        a.download = filename;
+        a.download = safeName;
         a.click();
         return;
       }
-      await Share.share({ url, title: filename, message: filename });
+      const dir = FileSystem.cacheDirectory || FileSystem.documentDirectory;
+      if (!dir) {
+        throw new Error("Storage unavailable on this device");
+      }
+      const uri = `${dir}${safeName}`;
+      await FileSystem.writeAsStringAsync(uri, base64, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
+      const canShare = await Sharing.isAvailableAsync();
+      if (!canShare) {
+        Alert.alert("Invoice saved", `Saved to ${uri}`);
+        return;
+      }
+      await Sharing.shareAsync(uri, {
+        mimeType: "application/pdf",
+        dialogTitle: safeName,
+        UTI: "com.adobe.pdf",
+      });
     } catch (e: any) {
       Alert.alert("Invoice", e?.message ?? "Could not download invoice");
     }

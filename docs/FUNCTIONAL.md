@@ -57,7 +57,7 @@ Login (both): tenant_code + username + password → JWT (`aud: admin`). Web stor
 | Customers | List + detail | List + detail | KYC |
 | SIP | Plans CRUD + enrollments | Same | Mandates, SMS |
 | Branding / CMS | Theme + CMS | Theme + CMS | Domain list UI |
-| Settings | Business + margins + gateway | Same | GST invoice PDF |
+| Settings | Business + margins + gateway | Same | E-invoice IRN |
 | Staff | Owner CRUD | Owner CRUD | Fine-grained ACL |
 | POS / purchases / reports | Desktop CTA only | Full | — |
 
@@ -81,7 +81,7 @@ Demo login: `AURELIA` / `owner` / `Aurelia@123`.
 - Wishlist still device-local
 
 ### Checkout / pay — Partial
-- **Today:** Authenticated checkout; Razorpay Test Mode Checkout + `pay/confirm`; GST stub invoice PDF; webhook; rate lock TTL
+- **Today:** Authenticated checkout; Razorpay Test Mode Checkout + `pay/confirm`; jeweler tax invoice PDF (GST 3% breakup, no IRN); webhook; rate lock TTL
 - **Next:** Live Mode go-live; e-invoice IRN
 
 ### SIP purchase — Partial
