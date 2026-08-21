@@ -1,0 +1,39 @@
+{
+  "summary": "Backend-only tests for iteration 2 features (live piece pricing on products + SIP due reminders) plus full regression. 36/36 pytest cases passed (7 new + 29 existing). Verified: (1) GET /public/products/{id} returns live_price and full pricing{metal_value, making, purity, purity_factor, rate_per_gram, live_price, stale, fetched_at} — aur-rings-0 pricing.making==12500, purity_factor 0.75, metal_value == round(4.2 × gold_rate × 0.75), live_price == round(metal + making) within ±1 rupee, and pricing.rate_per_gram matches /public/rates gold.inr_per_gram. (2) GET /public/products?featured=true — every returned item has a positive live_price and a pricing block whose live_price matches the top-level live_price. (3) 22K product (aur-necklaces-2, 18.4g, making 32000) correctly uses purity_factor 0.916. (4) Cross-tenant NOIR (7% gold margin) vs AURELIA (6%) for the equivalent rings-0 SKU — pricing.rate_per_gram differs; ratio ≈ 1.07/1.06 (±0.001) and NOIR live_price > AURELIA live_price while making is identical (12500). (5) SIP reminder source: after POST /sip/enroll, GET /sip/enrollments shows an installment with status='due' and due_date ≤ now (within 5s clock-skew tolerance); after POST .../pay, that installment becomes 'paid' with paid_at set, the next installment (index 2) becomes 'due' with due_date ~30 days in the future (25 < Δdays < 35), and there are zero installments matching (status=='due' AND due_date ≤ now) — i.e. the frontend reminder rule now yields no nudges. Full regression suite (rates/margins/isolation/bootstrap/cms/categories/products/orders/sip flows) still green.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_live_pricing_sip_due.py",
+    "/app/backend/tests/test_rates_sip_orders.py",
+    "/app/backend/tests/test_storefront.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py:_enrich_product_price — rounds metal_value and making independently then rounds their sum for live_price; math holds but tests allow ±1 rupee tolerance between round(a)+round(b) and round(a+b). Acceptable for display.",
+    "server.py:PURITY_FACTORS uses float constants — fine for display-only pricing; if this ever backs invoices, switch to Decimal to avoid drift.",
+    "server.py:_enrich_product_price falls back to prod['price'] when rates are unavailable and sets pricing=None. Frontend must handle pricing==null to render 'indicative' vs. 'live'. No breakage observed; feed was live during this run.",
+    "server.py:sip_enroll — first installment's due_date == start (now, UTC), so it is instantly 'due'. After pay, the promoted installment's due_date is 30 days after the ORIGINAL start, i.e. still ~30 days ahead of 'now' at test time. Works for the demo; a longer real-world gap between enroll and first pay could produce a promoted due_date that's already <= now again. Not a bug for this iteration but worth a note.",
+    "server.py:refresh_spot swallows exceptions and keeps the last-known snapshot; stale flag is exposed. Good resilience for the third-party gold-api.com + frankfurter.dev dependencies."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_live_pricing_sip_due.py (new)"
+  ],
+  "success_rate": {
+    "backend": "100% (36/36)",
+    "frontend": "not tested (backend-only request)"
+  },
+  "seed_data_creation": "No persistent seed changes. Tests create ephemeral SIP enrollments and orders under TEST_ guest_ids only, isolated from real flows.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend green after iteration_2. Three test files under /app/backend/tests/: test_storefront.py (bootstrap/cms/categories/products/isolation), test_rates_sip_orders.py (live rates + SIP + orders + cross-tenant isolation), test_live_pricing_sip_due.py (NEW: product live_price/pricing block + SIP due-date transition). BASE_URL = EXPO_PUBLIC_BACKEND_URL from /app/frontend/.env. AURELIA host = aurelia.luxejewel.app (gold_pct 6, silver_pct 9); NOIR host = noir.luxejewel.app (gold_pct 7, silver_pct 10). Product IDs are tenant-prefixed: aur-* on AURELIA, noi-* on NOIR — noi-* is only fetchable via the NOIR host. Live external feeds (gold-api.com + frankfurter.dev) power /public/rates; on outage the rates endpoint returns 503 and product live_price falls back to prod.price with pricing=null — frontend should already handle that.",
+  "rca_of_issue": "N/A — no bugs found."
+}

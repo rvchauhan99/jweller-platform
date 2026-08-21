@@ -1,0 +1,159 @@
+{
+  "app_name": "LuxeJewel Multi-Tenant Storefront",
+  "personality": "3 Editorial structure with 6 Glass / Luxe surfaces",
+  "personality_one_liner": "A quiet, highly refined gallery where generous whitespace, classic typography, and premium imagery build absolute trust, acting as an invisible vessel for any luxury brand.",
+  "color": {
+    "surface": "#FAFAF7",
+    "onSurface": "#1A1A18",
+    "surfaceSecondary": "#FFFFFF",
+    "onSurfaceSecondary": "#1A1A18",
+    "surfaceTertiary": "#F0F0EA",
+    "onSurfaceTertiary": "#4A4A46",
+    "surfaceInverse": "#1A1A18",
+    "onSurfaceInverse": "#FAFAF7",
+    "brand": "#BFA75D",
+    "brandPrimary": "#BFA75D",
+    "onBrandPrimary": "#FFFFFF",
+    "brandSecondary": "#8C7738",
+    "onBrandSecondary": "#FFFFFF",
+    "brandTertiary": "#E6DDBB",
+    "onBrandTertiary": "#332A0F",
+    "success": "#3C5441",
+    "onSuccess": "#FFFFFF",
+    "warning": "#8C6A2E",
+    "onWarning": "#FFFFFF",
+    "error": "#702A2A",
+    "onError": "#FFFFFF",
+    "info": "#3B4A59",
+    "onInfo": "#FFFFFF",
+    "border": "#E0DCD1",
+    "borderStrong": "#BFA75D",
+    "divider": "#EFECE5"
+  },
+  "typography": {
+    "displayFontFamily": "CormorantGaramond_500Medium",
+    "textFontFamily": "DMSans_400Regular",
+    "scale": {
+      "sm": 12,
+      "base": 14,
+      "lg": 16,
+      "xl": 20,
+      "2xl": 24
+    }
+  },
+  "spacing": {
+    "rule": "Generous editorial spacing. Let elements breathe to simulate a premium boutique experience.",
+    "xs": 4,
+    "sm": 8,
+    "md": 12,
+    "lg": 16,
+    "xl": 24,
+    "2xl": 32,
+    "3xl": 48
+  },
+  "radius_tokens": {
+    "sm": 0,
+    "md": 4,
+    "lg": 8,
+    "pill": 999
+  },
+  "shadow_tier": "1",
+  "navigation": "bottom_tabs",
+  "icon_set": "Feather",
+  "glassmorphism": {
+    "enabled": true,
+    "do's": [
+      "Use subtle glass (expo-blur) for sticky tab bars and sticky bottom action buttons.",
+      "Use a gradient scrim behind text overlaid on hero imagery to guarantee readability."
+    ],
+    "dont's": [
+      "Do not use blur on product cards in the grid.",
+      "Do not blur entire background screens."
+    ]
+  },
+  "platform_libraries": {
+    "glass": {
+      "ios": "expo-glass-effect",
+      "android": "expo-blur",
+      "low_end_android_fallback": "solid surfaceSecondary"
+    },
+    "image": "expo-image",
+    "blur": "expo-blur",
+    "bottom_sheet": "@gorhom/bottom-sheet",
+    "animation": "react-native-reanimated",
+    "gesture": "react-native-gesture-handler"
+  },
+  "screens": [
+    {
+      "name": "Home",
+      "purpose": "Serve as a luxury discovery hub with immersive brand imagery, an 'About' story, and curated featured products.",
+      "states": {
+        "loading": "Full-screen skeleton placeholders matching the exact dimensions of hero and category tiles.",
+        "empty": "N/A - handled per section.",
+        "error": "Themed 'Store temporarily unavailable' fallback."
+      },
+      "layout": "1. Edge-to-edge full-bleed Hero image with vertical gradient scrim (transparent to surfaceInverse at 70% opacity). Brand Wordmark layered at the bottom 30% of the image.\n2. Optional Gold Rate Ticker directly below hero (a surfaceTertiary subtle banner).\n3. Horizontal scroll of featured categories/collections (circular or 4:5 aspect ratio images).\n4. 'About the Brand' section with generous text formatting (Cormorant Garamond headers).\n5. Featured Product Grid preview (2-col)."
+    },
+    {
+      "name": "CategoryCatalog",
+      "purpose": "Allow structured browsing of the jewelry collection through an elegant, distraction-free grid.",
+      "states": {
+        "loading": "Grid of skeleton cards at 4:5 aspect ratio.",
+        "empty": "'New pieces coming soon' elegantly centered with a subtle line illustration or text only.",
+        "error": "Failed to load collection error message with a subtle retry button."
+      },
+      "layout": "1. Sticky header with category title. Filter chips (e.g., Purity, Weight, Sort) scrolling horizontally below header.\n2. 2-column product grid with md gap. Each card features a 4:5 aspect ratio image on surfaceSecondary, Product Name, Weight, and Price. Text is left-aligned, highly readable."
+    },
+    {
+      "name": "ProductDetail",
+      "purpose": "An immersive, tactile exploration of a single piece of jewelry, prioritizing high-resolution imagery and clear pricing/purity breakdown.",
+      "states": {
+        "loading": "Large image skeleton spanning 60% of height, with text line skeletons below.",
+        "empty": "Product unavailable.",
+        "error": "Error loading product data."
+      },
+      "layout": "1. Edge-to-edge full-width image carousel taking top 50-60% of the screen. Absolute positioned transparent header over it.\n2. Product information tray smoothly following the image. Title, Price, Purity (22K/18K) in chips or structured list.\n3. Making Charge and Weight clearly itemized separated by thin dividers (0.5pt).\n4. Sticky Add-to-Bag/Inquire primary button pinned at the bottom, safe-area aware, with a glass or surface fade behind it."
+    },
+    {
+      "name": "StoreSwitcher",
+      "purpose": "A utility screen to demonstrate multi-tenancy by allowing users to enter a store code to instantly hot-swap the app's theme.",
+      "states": {
+        "loading": "Applying new theme...",
+        "empty": "N/A",
+        "error": "Invalid store code."
+      },
+      "layout": "Minimalist single-column form centered vertically. Input field with border styling, and a prominent Submit button. High contrast, focusing entirely on the action of swapping tenants."
+    }
+  ],
+  "images": {
+    "home_hero": {
+      "url": "https://images.pexels.com/photos/7895502/pexels-photo-7895502.jpeg",
+      "dark": "https://images.pexels.com/photos/37618169/pexels-photo-37618169.jpeg",
+      "alt": "Stunning close-up portrait of an elegant woman wearing exquisite jewelry"
+    },
+    "product_1": {
+      "url": "https://images.unsplash.com/photo-1613945407943-59cd755fd69e",
+      "alt": "Silver diamond ring"
+    },
+    "product_2": {
+      "url": "https://images.unsplash.com/photo-1588444968576-f8fe92ce56fd",
+      "alt": "Silver necklace with heart pendant"
+    },
+    "product_3": {
+      "url": "https://images.unsplash.com/photo-1589128777073-263566ae5e4d",
+      "alt": "Silver heart pendant necklace"
+    },
+    "empty_state_icon": {
+      "url": "https://images.unsplash.com/photo-1582803112160-1e4418e285a1",
+      "alt": "Elegant empty jewelry box"
+    }
+  },
+  "instructions_to_main_agent": [
+    "CRITICAL ARCHITECTURE REQUIREMENT: The application MUST be built using a robust React Context (or similar state management) Theme Provider. NO colors or typography choices can be hardcoded as hex values or string literals in your stylesheets or inline styles. Every component must read from the active theme object via a hook (e.g., `const theme = useTheme()`).",
+    "MULTI-TENANT PRESETS: You must provide at least two predefined theme objects in your code to demonstrate swapping: 1. 'Classic Gold' (using the color values provided in this JSON and Cormorant Garamond / DM Sans) and 2. 'Dark Royal' (backgrounds shifted to near-black #0D0F12, accents to #D4AF37, keeping high contrast text). The 'StoreSwitcher' screen should toggle between these objects in memory to show instant restyling.",
+    "TYPOGRAPHY SCALING: Maintain strict discipline with typography. Use the display serif font for large headings, hero texts, and major section titles. Use the sans-serif font for all body copy, metadata (purity, weight), labels, and buttons. Never use font weights above 500.",
+    "PRODUCT GRID: The 2-col product grid must have consistent fixed aspect ratios for product images (e.g., 4:5). Use `expo-image` and ensure images scale smoothly. Add a 0.5pt `border` or just a subtle `surfaceSecondary` background block to contain product cards without using heavy drop shadows.",
+    "HERO OVERLAYS: Whenever placing the brand name, title, or buttons over a hero image, you MUST inject a `<LinearGradient>` scrim positioned absolutely behind the text to ensure WCAG contrast ratios are met, regardless of the dynamic image loaded.",
+    "MOTION: Keep interactions quiet and luxurious. Favor slow fades, smooth 300ms bottom-sheet reveals, and gentle spring animations. Avoid bouncy or frantic motion."
+  ]
+}

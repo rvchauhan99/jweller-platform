@@ -1,0 +1,38 @@
+{
+  "summary": "Backend-only regression + new feature tests for the multi-tenant luxury jeweler storefront. Ran 29 pytest cases (14 new for rates/SIP/orders/isolation + 15 existing storefront tests). All 29 passed. Verified: live gold/silver rate feed with per-tenant margin (AURELIA gold=6%, NOIR gold=7%, silver=9%/10%), stale=false, correct math ratio (n/a == 1.07/1.06); SIP plans seeded (gold-11-1, gold-flex, silver-12); enroll creates 11 installments (1 due, 10 upcoming); pay marks first paid, locks rate, computes grams = amount/rate, promotes next to due; enrollments scoped by guest_id; wrong guest_id -> 404; plan-not-found -> 404; guest orders create with RSV- prefix, correct subtotal, status='reserved'; empty items -> 400; strict tenant isolation: AURELIA-created orders & SIP enrollments invisible from NOIR host even with same guest_id; unknown host & reserved host (admin.luxejewel.app) -> 404 on all endpoints including /rates; existing bootstrap/cms/categories/products endpoints still healthy.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [],
+    "react_native_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_storefront.py",
+    "/app/backend/tests/test_rates_sip_orders.py",
+    "/app/test_reports/pytest/pytest_results.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "server.py:378 `sip_pay` returns 404 when guest_id doesn't match — good tenant/guest scoping; consider 403 semantically but 404 is acceptable to avoid leaking existence.",
+    "server.py:384 `next payable installment` picks first with status in ('due','upcoming'); works because installments are index-sorted but relying on insertion order — safe here since seed builds them in order.",
+    "server.py:440 `subtotal` uses float arithmetic then rounds to 2dp — acceptable for demo but consider Decimal for money if this ever leaves demo scope.",
+    "server.py: `refresh_spot` swallows any exception and keeps last-known snapshot — good resilience. Staleness flag correctly exposed via `_is_stale`.",
+    "server.py: No rate limiting on POST /sip/enroll and /orders — fine for guest demo, but flag for prod."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_rates_sip_orders.py (new)"
+  ],
+  "success_rate": {
+    "backend": "100% (29/29)",
+    "frontend": "not tested (backend-only request)"
+  },
+  "seed_data_creation": "No seed data written. Tests create ephemeral guest_ids prefixed with TEST_ and rely on the idempotent startup seed. Test-created orders/enrollments remain in the tenant DBs but are isolated behind unique TEST_ guest_ids so they don't affect real flows.",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Backend fully green as of iteration_1. Existing test file: /app/backend/tests/test_storefront.py covers bootstrap/cms/categories/products/tenant isolation. New file: /app/backend/tests/test_rates_sip_orders.py covers live rates, SIP flows, orders, and cross-tenant isolation for orders/SIP. BASE_URL comes from EXPO_PUBLIC_BACKEND_URL in /app/frontend/.env. AURELIA host = aurelia.luxejewel.app, NOIR host = noir.luxejewel.app; unknown/reserved hosts must 404. If gold-api.com or frankfurter.dev goes down, /public/rates could return 503 (Rate feed temporarily unavailable) which would cascade into SIP pay 503; keep an eye on that.",
+  "rca_of_issue": "N/A — no bugs found."
+}
