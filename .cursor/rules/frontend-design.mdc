@@ -1,0 +1,29 @@
+---
+description: Three-app frontend constitution — storefront luxury vs dense admin vs platform console; tenant tokens only on the storefront.
+alwaysApply: true
+---
+
+# Frontend constitution
+
+Read [docs/FRONTEND.md](docs/FRONTEND.md) and [docs/PROGRESS.md](docs/PROGRESS.md) before any UI. Customer Expo app lives in `frontend/`; Next.js admin/console remain the dense ERP target.
+
+## Three languages
+
+- **Storefront** — Expo white-label luxury retail. Imagery, type, space. Tokens from bootstrap / [docs/THEMING.md](docs/THEMING.md).
+- **Jeweler admin** — Stripe / Linear density (interim Expo `/admin`; target Next.js). Platform tokens. Tenant logo is orientation only.
+- **Platform console** — Vercel / Railway control. Not built yet. No vanity KPI card walls.
+
+Never restyle admin as the storefront preset. Never put ERP tables on the shop.
+
+## Tokens
+
+Storefront: `var(--color-primary)` (and the rest of the THEMING contract).  
+Forbidden for brand: `text-blue-600`, `#C9A227`, hardcoded fonts.
+
+## Before any screen
+
+Who, primary goal, required action, what matters most, fastest workflow.
+
+## Reject
+
+Four equal metric cards as a dashboard. Card-in-card. Purple gradients. Global customer SSO UI. Platform payment branding on checkout.
