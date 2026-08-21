@@ -80,6 +80,11 @@ memory/test_credentials.md
 
 # Mobile development
 android-sdk/
+frontend/android/
+frontend/ios/
+*.apk
+*.aab
+*.keystore
 .env
 .env.*
 !.env.example

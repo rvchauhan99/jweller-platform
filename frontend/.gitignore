@@ -10,14 +10,19 @@ dist/
 web-build/
 expo-env.d.ts
 
-# Native
+# Native (expo prebuild — regenerate locally; do not commit)
+android/
+ios/
 .kotlin/
 *.orig.*
 *.jks
+*.keystore
 *.p8
 *.p12
 *.key
 *.mobileprovision
+*.apk
+*.aab
 
 # Metro
 .metro-health-check*
