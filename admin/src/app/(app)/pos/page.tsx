@@ -1,9 +1,21 @@
 "use client"
 
 import { FormEvent, useEffect, useState } from "react"
+import { CheckCircle, Minus, Package, Plus, Search, Trash2 } from "lucide-react"
 import { api } from "@/lib/api"
 import { money } from "@/lib/money"
-import { Button, Field, Input, PageHeader, Panel, Select } from "@/components/ui"
+import {
+  AlertBar,
+  Button,
+  Empty,
+  Field,
+  Input,
+  PageHeader,
+  Panel,
+  Select,
+  SectionHeading,
+  StatusDot,
+} from "@/components/ui"
 
 interface Product {
   id: string
@@ -31,11 +43,16 @@ export default function PosPage() {
   const [contactPhone, setContactPhone] = useState("")
   const [q, setQ] = useState("")
   const [submitting, setSubmitting] = useState(false)
-  const [message, setMessage] = useState("")
+  const [successNo, setSuccessNo] = useState("")
   const [error, setError] = useState("")
 
+  const loadProducts = () =>
+    api<Product[]>("/products")
+      .then(setProducts)
+      .catch((e) => setError(e.message))
+
   useEffect(() => {
-    api<Product[]>("/products").then(setProducts).catch((e) => setError(e.message))
+    loadProducts()
   }, [])
 
   const filtered = products.filter((p) => {
@@ -48,6 +65,7 @@ export default function PosPage() {
   })
 
   const handleAdd = (p: Product) => {
+    if (p.stock_qty < 1) return
     setCart((prev) => {
       const existing = prev.find((l) => l.product_id === p.id)
       if (existing) {
@@ -67,20 +85,24 @@ export default function PosPage() {
         },
       ]
     })
-    setMessage("")
+    setSuccessNo("")
     setError("")
   }
 
-  const handleQty = (productId: string, qty: number) => {
+  const handleQty = (productId: string, delta: number) => {
     setCart((prev) =>
       prev
         .map((l) => {
           if (l.product_id !== productId) return l
-          const next = Math.max(0, Math.min(qty, l.stock_qty))
+          const next = Math.max(0, Math.min(l.qty + delta, l.stock_qty))
           return { ...l, qty: next }
         })
         .filter((l) => l.qty > 0)
     )
+  }
+
+  const handleRemove = (productId: string) => {
+    setCart((prev) => prev.filter((l) => l.product_id !== productId))
   }
 
   const total = cart.reduce((sum, l) => sum + l.unit_price * l.qty, 0)
@@ -93,7 +115,7 @@ export default function PosPage() {
     }
     setSubmitting(true)
     setError("")
-    setMessage("")
+    setSuccessNo("")
     try {
       const order = await api<{ order_no: string }>("/pos/sale", {
         method: "POST",
@@ -109,11 +131,11 @@ export default function PosPage() {
           lock_rate: true,
         },
       })
-      setMessage(`Sale recorded: ${order.order_no}`)
+      setSuccessNo(order.order_no)
       setCart([])
       setContactName("")
       setContactPhone("")
-      setProducts(await api<Product[]>("/products"))
+      await loadProducts()
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sale failed")
     } finally {
@@ -125,109 +147,240 @@ export default function PosPage() {
     <div>
       <PageHeader title="POS" subtitle="Walk-in sale · cash / UPI / card" />
       <div className="grid gap-4 lg:grid-cols-5">
-        <Panel className="lg:col-span-3">
+        {/* ── Product picker ──────────────────────────────────────────── */}
+        <Panel className="lg:col-span-3 flex flex-col" style={{ maxHeight: "calc(100vh - 160px)" }}>
+          {/* Search bar */}
           <div className="border-b border-border p-3">
-            <Input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Search products…"
-              aria-label="Search products"
-            />
+            <div className="relative">
+              <Search
+                size={14}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-muted pointer-events-none"
+                aria-hidden
+              />
+              <Input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Search by name or SKU…"
+                aria-label="Search products"
+                className="pl-8"
+              />
+            </div>
           </div>
-          <ul className="max-h-[60vh] divide-y divide-border overflow-y-auto" role="list">
-            {filtered.map((p) => (
-              <li key={p.id}>
-                <button
-                  type="button"
-                  className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left hover:bg-surface-alt"
-                  onClick={() => handleAdd(p)}
-                  disabled={p.stock_qty < 1}
-                  aria-label={`Add ${p.name} to cart`}
-                >
-                  <div>
-                    <div className="text-sm font-medium text-text">{p.name}</div>
-                    <div className="text-xs text-muted">
-                      {p.sku} · stock {p.stock_qty}
-                    </div>
-                  </div>
-                  <div className="text-sm font-medium">{money(p.live_price ?? p.price ?? 0)}</div>
-                </button>
+
+          {/* Product list */}
+          <ul
+            className="flex-1 divide-y divide-border overflow-y-auto"
+            role="list"
+            aria-label="Products"
+          >
+            {filtered.length === 0 ? (
+              <li>
+                <Empty
+                  icon={<Package size={22} />}
+                  title="No products found"
+                  description={q ? `No match for "${q}"` : "No products in inventory."}
+                />
               </li>
-            ))}
+            ) : (
+              filtered.map((p) => {
+                const inStock = p.stock_qty > 0
+                const inCart = cart.find((l) => l.product_id === p.id)
+                return (
+                  <li key={p.id}>
+                    <button
+                      type="button"
+                      className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-surface-alt disabled:cursor-not-allowed disabled:opacity-50"
+                      onClick={() => handleAdd(p)}
+                      disabled={!inStock}
+                      aria-label={`Add ${p.name} to cart`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        {/* Stock indicator */}
+                        <StatusDot
+                          variant={
+                            p.stock_qty === 0
+                              ? "danger"
+                              : p.stock_qty <= 2
+                              ? "warning"
+                              : "success"
+                          }
+                          className="shrink-0"
+                        />
+                        <div className="min-w-0">
+                          <div className="truncate text-[13px] font-medium text-text">
+                            {p.name}
+                          </div>
+                          <div className="text-[11px] text-muted">
+                            {p.sku ? `${p.sku} · ` : ""}
+                            {inStock ? `${p.stock_qty} in stock` : "Out of stock"}
+                            {inCart ? ` · ${inCart.qty} in cart` : ""}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <div className="text-[13px] font-semibold tabular-nums text-text">
+                          {money(p.live_price ?? p.price ?? 0)}
+                        </div>
+                        {p.weight_grams ? (
+                          <div className="text-[11px] text-muted">{p.weight_grams}g</div>
+                        ) : null}
+                      </div>
+                    </button>
+                  </li>
+                )
+              })
+            )}
           </ul>
         </Panel>
 
-        <Panel className="p-4 lg:col-span-2">
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <h2 className="text-sm font-semibold">Cart</h2>
+        {/* ── Cart + checkout ─────────────────────────────────────────── */}
+        <div className="lg:col-span-2 flex flex-col gap-4">
+          {/* Cart */}
+          <Panel className="p-4">
+            <SectionHeading>Cart</SectionHeading>
             {!cart.length ? (
-              <p className="text-sm text-muted">Pick products from the list.</p>
+              <p className="py-4 text-center text-[12.5px] text-muted">
+                Pick products from the list.
+              </p>
             ) : (
-              <ul className="space-y-2">
+              <ul className="space-y-2" role="list">
                 {cart.map((l) => (
-                  <li key={l.product_id} className="flex items-center gap-2 text-sm">
+                  <li
+                    key={l.product_id}
+                    className="flex items-center gap-2"
+                  >
+                    {/* Name + unit price */}
                     <div className="min-w-0 flex-1">
-                      <div className="truncate font-medium">{l.name}</div>
-                      <div className="text-xs text-muted">{money(l.unit_price)} each</div>
+                      <div className="truncate text-[13px] font-medium text-text">
+                        {l.name}
+                      </div>
+                      <div className="text-[11px] text-muted">
+                        {money(l.unit_price)} each
+                      </div>
                     </div>
-                    <Input
-                      type="number"
-                      className="w-16"
-                      min={1}
-                      max={l.stock_qty}
-                      value={l.qty}
-                      onChange={(e) => handleQty(l.product_id, Number(e.target.value))}
-                      aria-label={`Quantity for ${l.name}`}
-                    />
-                    <div className="w-20 text-right font-medium">{money(l.unit_price * l.qty)}</div>
+                    {/* Qty stepper */}
+                    <div className="flex items-center gap-1 rounded-md border border-border overflow-hidden shrink-0">
+                      <button
+                        type="button"
+                        className="flex h-7 w-7 items-center justify-center text-muted hover:bg-surface-alt hover:text-text transition-colors disabled:opacity-40"
+                        onClick={() => handleQty(l.product_id, -1)}
+                        disabled={l.qty <= 1}
+                        aria-label={`Decrease quantity of ${l.name}`}
+                      >
+                        <Minus size={11} aria-hidden />
+                      </button>
+                      <span className="w-6 text-center text-[12.5px] font-semibold tabular-nums">
+                        {l.qty}
+                      </span>
+                      <button
+                        type="button"
+                        className="flex h-7 w-7 items-center justify-center text-muted hover:bg-surface-alt hover:text-text transition-colors disabled:opacity-40"
+                        onClick={() => handleQty(l.product_id, 1)}
+                        disabled={l.qty >= l.stock_qty}
+                        aria-label={`Increase quantity of ${l.name}`}
+                      >
+                        <Plus size={11} aria-hidden />
+                      </button>
+                    </div>
+                    {/* Line total */}
+                    <div className="w-20 shrink-0 text-right text-[13px] font-semibold tabular-nums">
+                      {money(l.unit_price * l.qty)}
+                    </div>
+                    {/* Remove */}
+                    <button
+                      type="button"
+                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded text-muted hover:bg-danger-soft hover:text-danger transition-colors"
+                      onClick={() => handleRemove(l.product_id)}
+                      aria-label={`Remove ${l.name} from cart`}
+                    >
+                      <Trash2 size={12} aria-hidden />
+                    </button>
                   </li>
                 ))}
               </ul>
             )}
 
-            <div className="border-t border-border pt-3">
-              <div className="flex justify-between text-base font-semibold">
-                <span>Total</span>
-                <span>{money(total)}</span>
+            {/* Total row */}
+            {cart.length > 0 ? (
+              <div className="mt-4 flex items-center justify-between border-t border-border pt-3">
+                <span className="text-[12px] font-semibold uppercase tracking-wide text-muted">
+                  Total
+                </span>
+                <span className="text-[20px] font-bold tabular-nums text-text">
+                  {money(total)}
+                </span>
               </div>
-            </div>
+            ) : null}
+          </Panel>
 
-            <Field label="Tender" htmlFor="tender">
-              <Select
-                id="tender"
-                value={tender}
-                onChange={(e) => setTender(e.target.value as "cash" | "upi" | "card")}
+          {/* Checkout form */}
+          <Panel className="p-4">
+            <SectionHeading>Checkout</SectionHeading>
+            <form onSubmit={handleSubmit} className="space-y-3">
+              <Field label="Tender" htmlFor="tender">
+                <Select
+                  id="tender"
+                  value={tender}
+                  onChange={(e) => setTender(e.target.value as "cash" | "upi" | "card")}
+                >
+                  <option value="cash">Cash</option>
+                  <option value="upi">UPI</option>
+                  <option value="card">Card</option>
+                </Select>
+              </Field>
+              <Field label="Contact name (optional)" htmlFor="contact_name">
+                <Input
+                  id="contact_name"
+                  value={contactName}
+                  onChange={(e) => setContactName(e.target.value)}
+                  placeholder="Walk-in"
+                />
+              </Field>
+              <Field label="Phone (optional)" htmlFor="contact_phone">
+                <Input
+                  id="contact_phone"
+                  value={contactPhone}
+                  onChange={(e) => setContactPhone(e.target.value)}
+                  placeholder="10-digit"
+                />
+              </Field>
+
+              {error ? <AlertBar variant="danger">{error}</AlertBar> : null}
+
+              {successNo ? (
+                <div className="flex items-center gap-2.5 rounded-md border border-[color:var(--success)] bg-success-soft px-4 py-3">
+                  <CheckCircle size={16} className="text-success shrink-0" aria-hidden />
+                  <div>
+                    <p className="text-[13px] font-semibold text-success">
+                      Sale recorded!
+                    </p>
+                    <p className="text-[11.5px] text-success opacity-80">{successNo}</p>
+                  </div>
+                </div>
+              ) : null}
+
+              <Button
+                type="submit"
+                size="lg"
+                className="w-full"
+                disabled={submitting || !cart.length}
+                aria-label="Complete sale"
               >
-                <option value="cash">Cash</option>
-                <option value="upi">UPI</option>
-                <option value="card">Card</option>
-              </Select>
-            </Field>
-            <Field label="Contact name (optional)" htmlFor="contact_name">
-              <Input
-                id="contact_name"
-                value={contactName}
-                onChange={(e) => setContactName(e.target.value)}
-                placeholder="Walk-in"
-              />
-            </Field>
-            <Field label="Phone (optional)" htmlFor="contact_phone">
-              <Input
-                id="contact_phone"
-                value={contactPhone}
-                onChange={(e) => setContactPhone(e.target.value)}
-                placeholder="10-digit"
-              />
-            </Field>
-
-            {error ? <p className="text-sm text-danger">{error}</p> : null}
-            {message ? <p className="text-sm text-success">{message}</p> : null}
-
-            <Button type="submit" className="w-full" disabled={submitting || !cart.length}>
-              {submitting ? "Recording…" : "Complete sale"}
-            </Button>
-          </form>
-        </Panel>
+                {submitting ? (
+                  <span className="flex items-center gap-2">
+                    <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden>
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    Recording…
+                  </span>
+                ) : (
+                  `Complete sale${total > 0 ? ` · ${money(total)}` : ""}`
+                )}
+              </Button>
+            </form>
+          </Panel>
+        </div>
       </div>
     </div>
   )

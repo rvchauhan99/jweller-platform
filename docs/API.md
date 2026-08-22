@@ -44,13 +44,18 @@ Public tenant from `X-Tenant-Host` (or Host). Admin from JWT.
 
 | Method | Path |
 |--------|------|
-| POST | `/api/admin/auth/login` |
-| GET | `/api/admin/me` |
+| POST | `/api/admin/auth/login` | `{ tenant_code, username, password, totp? }` → JWT or `{ two_fa_required: true }` |
+| POST | `/api/admin/auth/forgot/request` | SMS OTP (generic ack; `dev_otp` non-prod) |
+| POST | `/api/admin/auth/forgot/confirm` | Set new password with OTP |
+| POST | `/api/admin/auth/change-password` | Bearer |
+| POST | `/api/admin/auth/2fa/generate` \| `/enable` \| `/disable` | Optional TOTP |
+| GET | `/api/admin/me` | includes `two_fa_enabled`, `phone_masked` |
 | GET | `/api/admin/dashboard` |
 | GET/POST/PUT/DELETE | `/api/admin/products`, `/api/admin/products/{id}` |
 | GET/POST/PUT/DELETE | `/api/admin/categories`, `/api/admin/categories/{id}` |
 | GET | `/api/admin/orders` |
-| PUT | `/api/admin/orders/{id}/status` |
+| PUT | `/api/admin/orders/{id}/status` | Body `{ status, reason? }`. Statuses: reserved→confirmed→packed→shipped→delivered; `cancelled`; **admin-only** `returned` from shipped\|delivered (restocks once; no Razorpay refund). No public return API. |
+| GET | `/api/admin/orders/{id}/invoice` | Tax invoice PDF (paid only) |
 | POST | `/api/admin/uploads` | Multipart `file` → R2 product image; returns `{ key, url }` |
 | GET | `/api/admin/storage/status` | R2 configured / mock flag |
 | GET | `/api/public/media/{path}` | Serve MOCK_R2 objects only |
@@ -142,7 +147,7 @@ Webhook exception: no Host. `tenant_id` in metadata is allowed **only** after si
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| POST | `/api/admin/auth/login` | `{ tenant_code, username, password }` |
+| POST | `/api/admin/auth/login` | `{ tenant_code, username, password, totp? }` → JWT or `{ two_fa_required: true }` |
 | POST | `/api/admin/auth/logout` | optional |
 | GET | `/api/admin/me` | |
 

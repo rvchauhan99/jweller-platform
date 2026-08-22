@@ -11,6 +11,22 @@ export interface AdminInfo {
   role: string;
   status: string;
   username?: string;
+  two_fa_enabled?: boolean;
+  phone_masked?: string | null;
+}
+
+interface AdminCtx {
+  ready: boolean;
+  token: string | null;
+  admin: AdminInfo | null;
+  login: (
+    tenantCode: string,
+    username: string,
+    password: string,
+    totp?: string
+  ) => Promise<{ ok: boolean; two_fa_required?: boolean; error?: string }>;
+  refreshMe: () => Promise<void>;
+  logout: () => void;
 }
 
 function usernameFromJwt(token: string): string | undefined {
@@ -23,14 +39,6 @@ function usernameFromJwt(token: string): string | undefined {
   } catch {
     return undefined;
   }
-}
-
-interface AdminCtx {
-  ready: boolean;
-  token: string | null;
-  admin: AdminInfo | null;
-  login: (tenantCode: string, username: string, password: string) => Promise<{ ok: boolean; error?: string }>;
-  logout: () => void;
 }
 
 const Ctx = createContext<AdminCtx | undefined>(undefined);
@@ -60,6 +68,34 @@ export async function adminFetch<T = any>(path: string, opts: RequestInit = {}):
   return res.json();
 }
 
+/** Download admin PDF (invoice) as base64 — Bearer auth, not JSON. */
+export async function adminDownloadPdf(path: string): Promise<{ filename: string; base64: string }> {
+  const res = await fetch(`${BASE}/api${path}`, {
+    headers: {
+      Accept: "application/pdf",
+      ...(CURRENT_TOKEN ? { Authorization: `Bearer ${CURRENT_TOKEN}` } : {}),
+    },
+  });
+  if (!res.ok) {
+    let detail = `Download failed (${res.status})`;
+    try {
+      detail = (await res.json())?.detail ?? detail;
+    } catch {}
+    const e: any = new Error(detail);
+    e.status = res.status;
+    throw e;
+  }
+  const buf = await res.arrayBuffer();
+  const bytes = new Uint8Array(buf);
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+  const base64 = typeof btoa !== "undefined" ? btoa(binary) : Buffer.from(bytes).toString("base64");
+  const disp = res.headers.get("Content-Disposition") || "";
+  const m = /filename="?([^"]+)"?/.exec(disp);
+  const leaf = path.split("/").filter(Boolean).pop() || "document";
+  return { filename: m?.[1] || `${leaf}.pdf`, base64 };
+}
+
 export function AdminProvider({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
   const [token, setToken] = useState<string | null>(null);
@@ -83,12 +119,32 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
     })();
   }, []);
 
-  const login = useCallback(async (tenantCode: string, username: string, password: string) => {
+  const refreshMe = useCallback(async () => {
+    if (!CURRENT_TOKEN) return;
+    const me = await adminFetch<AdminInfo>("/admin/me");
+    setAdmin({ ...me, username: me.username || usernameFromJwt(CURRENT_TOKEN) });
+  }, []);
+
+  const login = useCallback(async (tenantCode: string, username: string, password: string, totp?: string) => {
     try {
-      const data = await adminFetch<{ access_token: string } & AdminInfo>("/admin/auth/login", {
-        method: "POST",
-        body: JSON.stringify({ tenant_code: tenantCode, username, password }),
-      });
+      const data = await adminFetch<{ access_token?: string; two_fa_required?: boolean } & AdminInfo>(
+        "/admin/auth/login",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            tenant_code: tenantCode,
+            username,
+            password,
+            totp: totp || undefined,
+          }),
+        }
+      );
+      if (data.two_fa_required) {
+        return { ok: false, two_fa_required: true };
+      }
+      if (!data.access_token) {
+        return { ok: false, error: "Login failed" };
+      }
       CURRENT_TOKEN = data.access_token;
       await storage.setItem(TOKEN_KEY, data.access_token);
       setToken(data.access_token);
@@ -98,6 +154,7 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
         role: data.role,
         status: "active",
         username: data.username || usernameFromJwt(data.access_token),
+        two_fa_enabled: data.two_fa_enabled,
       });
       return { ok: true };
     } catch (e: any) {
@@ -112,7 +169,7 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
     setAdmin(null);
   }, []);
 
-  return <Ctx.Provider value={{ ready, token, admin, login, logout }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ ready, token, admin, login, refreshMe, logout }}>{children}</Ctx.Provider>;
 }
 
 export function useAdmin(): AdminCtx {

@@ -5,7 +5,6 @@ import { useParams } from "next/navigation"
 import { useEffect, useState } from "react"
 import { api } from "@/lib/api"
 import { money } from "@/lib/money"
-import { STATUS_COLOR } from "@/lib/status"
 import { Badge, Empty, PageHeader, Panel, Table, Td, Th } from "@/components/ui"
 
 interface Detail {
@@ -92,7 +91,7 @@ export default function CustomerDetailPage() {
                         </div>
                       </Td>
                       <Td>
-                        <Badge color={STATUS_COLOR[o.status]}>{o.status}</Badge>
+                        <Badge status={o.status}>{o.status}</Badge>
                       </Td>
                       <Td className="text-right">{money(o.subtotal)}</Td>
                     </tr>

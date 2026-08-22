@@ -61,6 +61,7 @@ export interface LoginBody {
   tenant_code: string
   username: string
   password: string
+  totp?: string
 }
 
 export interface LoginResult {
@@ -68,6 +69,11 @@ export interface LoginResult {
   tenant_code: string
   role: string
   username: string
+  two_fa_enabled?: boolean
+}
+
+export interface LoginChallenge {
+  two_fa_required: true
 }
 
 export interface MeResult {
@@ -76,9 +82,11 @@ export interface MeResult {
   role: string
   status?: string
   username?: string
+  two_fa_enabled?: boolean
+  phone_masked?: string | null
 }
 
-export const login = async (body: LoginBody): Promise<LoginResult> => {
+export const login = async (body: LoginBody): Promise<LoginResult | LoginChallenge> => {
   const res = await fetch("/api/auth/login", {
     method: "POST",
     credentials: "include",
@@ -89,7 +97,41 @@ export const login = async (body: LoginBody): Promise<LoginResult> => {
   if (!res.ok) {
     throw new ApiError(res.status, data?.detail || data?.error || "Login failed", data)
   }
+  if (data?.two_fa_required === true) {
+    return { two_fa_required: true }
+  }
   return data as LoginResult
+}
+
+export const forgotRequest = async (body: { tenant_code: string; username: string }) => {
+  const res = await fetch("/api/auth/forgot/request", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    throw new ApiError(res.status, data?.detail || "Request failed", data)
+  }
+  return data as { ok: boolean; message?: string; dev_otp?: string; dev_hint?: string }
+}
+
+export const forgotConfirm = async (body: {
+  tenant_code: string
+  username: string
+  code: string
+  new_password: string
+}) => {
+  const res = await fetch("/api/auth/forgot/confirm", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    throw new ApiError(res.status, data?.detail || "Confirm failed", data)
+  }
+  return data as { ok: boolean; message?: string }
 }
 
 export const logout = async (): Promise<void> => {

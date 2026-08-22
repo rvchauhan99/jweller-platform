@@ -131,8 +131,10 @@ Cannot call `/api/admin/*` unless impersonation is started. Impersonation issues
 
 ## Passwords and sessions
 
-- Staff: password hash (Argon2id or bcrypt) on Registry `tenant_admins` only.
+- Staff: password hash (bcrypt over SHA-256) on Registry `tenant_admins`; optional `phone` (+91) for forgot-password SMS OTP; optional TOTP (`two_fa_enabled`, encrypted `totp_secret`).
 - Customers: no password in v1 (OTP). **v1 OTP: Indian `+91` numbers only**, stored E.164.
+- Admin forgot password: SMS OTP via same `LogSmsProvider` / `OTP_DEV_CODE` as customers (no email links in v1).
+- Admin 2FA: opt-in authenticator TOTP from Profile (QuickerPay-style challenge on login).
 - Cookies: httpOnly session cookie **per origin**. `admin.yourplatform.in`, `console.yourplatform.in`, and each customer hostname use different cookie names/domains. JWT is the payload inside the cookie, not a Bearer header from JS. No `.yourplatform.in` parent cookie (would leak across jeweler subdomains).
 
 ---
@@ -146,7 +148,7 @@ Cannot call `/api/admin/*` unless impersonation is started. Impersonation issues
 | `sales_staff` | POS / orders / customers; no cost reports if policy says so |
 | `accountant` | Reports, GST, purchases; no theme/domain |
 
-Fine-grained ACL can live on `staff_profiles` in the tenant DB. Registry row stays thin: `tenant_code`, `username`, `password_hash`, `role`.
+Fine-grained ACL can live on `staff_profiles` in the tenant DB. Registry row: `tenant_code`, `username`, `password_hash`, `role`, `phone`, `two_fa_enabled`, encrypted TOTP secrets.
 
 ---
 

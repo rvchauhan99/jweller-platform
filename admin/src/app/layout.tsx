@@ -1,22 +1,21 @@
 import type { Metadata } from "next"
-import { Inter } from "next/font/google"
+import { GeistSans } from "geist/font/sans"
 import "./globals.css"
 
-const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-inter",
-  display: "swap",
-})
-
 export const metadata: Metadata = {
-  title: "Jeweler Admin",
-  description: "Dense ERP admin for jewelers",
+  title: {
+    template: "%s — Jeweler Admin",
+    default: "Jeweler Admin",
+  },
+  description: "Dense ERP admin for jewelers — manage inventory, orders, SIP, and more.",
 }
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default function RootLayout({
+  children,
+}: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en">
-      <body className={`${inter.variable} font-sans antialiased`}>{children}</body>
+    <html lang="en" className={GeistSans.variable}>
+      <body className="antialiased">{children}</body>
     </html>
   )
 }

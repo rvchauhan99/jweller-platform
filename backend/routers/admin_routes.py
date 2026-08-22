@@ -1,7 +1,7 @@
 """Jeweler admin API routes (mounted under /api)."""
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Depends, Query, Response, UploadFile, File
+from fastapi import APIRouter, HTTPException, Depends, Query, Response, UploadFile, File, Request
 from pydantic import BaseModel, Field
 from typing import List, Optional
 from datetime import datetime, timezone
@@ -11,6 +11,7 @@ import os
 import payments_razorpay as rzp
 import invoice_pdf as inv_pdf
 import r2_storage as r2
+import admin_auth_extras as aauth
 
 from deps import (
     registry,
@@ -42,6 +43,20 @@ class AdminLoginIn(BaseModel):
     tenant_code: str
     username: str
     password: str
+    totp: Optional[str] = None
+
+
+def _login_success_payload(admin: dict, tenant: Optional[dict]) -> dict:
+    return {
+        "access_token": _issue_token(admin),
+        "token_type": "bearer",
+        "expires_in": JWT_EXPIRE_MIN * 60,
+        "business_name": tenant["business_name"] if tenant else admin["tenant_code"],
+        "tenant_code": admin["tenant_code"],
+        "role": admin.get("role", "owner"),
+        "username": admin["username"],
+        "two_fa_enabled": bool(admin.get("two_fa_enabled")),
+    }
 
 
 @router.post("/admin/auth/login")
@@ -55,26 +70,209 @@ async def admin_login(body: AdminLoginIn):
     if admin.get("active") is False:
         raise HTTPException(status_code=403, detail="Account deactivated")
     tenant = await registry.tenants.find_one({"_id": admin["tenant_code"]})
+
+    if admin.get("two_fa_enabled"):
+        enc = admin.get("totp_secret")
+        if not enc:
+            raise HTTPException(status_code=403, detail="Authenticator not enrolled. Contact an owner.")
+        if not body.totp:
+            return {"two_fa_required": True}
+        try:
+            secret = aauth.decrypt_totp_secret(enc)
+        except Exception:
+            raise HTTPException(status_code=403, detail="Authenticator not enrolled. Contact an owner.")
+        if not aauth.verify_totp(secret, body.totp):
+            raise HTTPException(status_code=401, detail="Invalid authenticator code")
+
+    return _login_success_payload(admin, tenant)
+
+
+class ForgotRequestIn(BaseModel):
+    tenant_code: str
+    username: str
+
+
+class ForgotConfirmIn(BaseModel):
+    tenant_code: str
+    username: str
+    code: str
+    new_password: str
+
+
+@router.post("/admin/auth/forgot/request")
+async def admin_forgot_request(body: ForgotRequestIn, request: Request):
+    """Always return a generic success message (no user oracle)."""
+    generic = {"ok": True, "message": "If an account exists with a phone on file, an OTP was sent."}
+    code = body.tenant_code.strip().upper()
+    username = body.username.strip()
+    admin = await registry.tenant_admins.find_one({"tenant_code": code, "username": username})
+    if not admin or admin.get("active") is False or not admin.get("phone"):
+        return generic
+    tenant = await registry.tenants.find_one({"_id": code})
+    client_ip = request.client.host if request.client else "unknown"
+    try:
+        out = aauth.store_and_send_admin_reset_otp(
+            tenant_code=code,
+            username=username,
+            phone_e164=admin["phone"],
+            business_name=(tenant or {}).get("business_name") or code,
+            client_ip=client_ip,
+        )
+        return out
+    except HTTPException as e:
+        if e.status_code == 429:
+            raise
+        return generic
+
+
+@router.post("/admin/auth/forgot/confirm")
+async def admin_forgot_confirm(body: ForgotConfirmIn):
+    aauth.validate_admin_password(body.new_password)
+    code = body.tenant_code.strip().upper()
+    username = body.username.strip()
+    admin = await registry.tenant_admins.find_one({"tenant_code": code, "username": username})
+    if not admin or admin.get("active") is False:
+        raise HTTPException(status_code=400, detail="Invalid or expired OTP")
+    aauth.verify_admin_reset_otp(tenant_code=code, username=username, code=body.code)
+    await registry.tenant_admins.update_one(
+        {"tenant_code": code, "username": username},
+        {"$set": {"password_hash": hash_password(body.new_password), "updated_at": _now_iso()}},
+    )
+    return {"ok": True, "message": "Password updated. Sign in with your new password."}
+
+
+class ChangePasswordIn(BaseModel):
+    current_password: str
+    new_password: str
+
+
+@router.post("/admin/auth/change-password")
+async def admin_change_password(body: ChangePasswordIn, ctx=Depends(get_admin_ctx)):
+    aauth.validate_admin_password(body.new_password)
+    username = ctx.get("username")
+    if not username:
+        raise HTTPException(status_code=401, detail="Invalid session")
+    admin = await registry.tenant_admins.find_one(
+        {"tenant_code": ctx["tenant_code"], "username": username}
+    )
+    if not admin or not verify_password(body.current_password, admin.get("password_hash") or ""):
+        raise HTTPException(status_code=401, detail="Current password is incorrect")
+    await registry.tenant_admins.update_one(
+        {"tenant_code": ctx["tenant_code"], "username": username},
+        {"$set": {"password_hash": hash_password(body.new_password), "updated_at": _now_iso()}},
+    )
+    return {"ok": True}
+
+
+@router.post("/admin/auth/2fa/generate")
+async def admin_2fa_generate(ctx=Depends(get_admin_ctx)):
+    username = ctx.get("username")
+    if not username:
+        raise HTTPException(status_code=401, detail="Invalid session")
+    secret = aauth.new_totp_secret()
+    await registry.tenant_admins.update_one(
+        {"tenant_code": ctx["tenant_code"], "username": username},
+        {
+            "$set": {
+                "totp_pending_secret": aauth.encrypt_totp_secret(secret),
+                "updated_at": _now_iso(),
+            }
+        },
+    )
+    uri = aauth.totp_uri(secret=secret, username=username, tenant_code=ctx["tenant_code"])
     return {
-        "access_token": _issue_token(admin),
-        "token_type": "bearer",
-        "expires_in": JWT_EXPIRE_MIN * 60,
-        "business_name": tenant["business_name"] if tenant else admin["tenant_code"],
-        "tenant_code": admin["tenant_code"],
-        "role": admin.get("role", "owner"),
-        "username": admin["username"],
+        "otpauth_url": uri,
+        "secret": secret,
+        "qr_png_data_url": aauth.qr_png_data_url(uri),
     }
+
+
+class TotpIn(BaseModel):
+    totp: str
+
+
+@router.post("/admin/auth/2fa/enable")
+async def admin_2fa_enable(body: TotpIn, ctx=Depends(get_admin_ctx)):
+    username = ctx.get("username")
+    admin = await registry.tenant_admins.find_one(
+        {"tenant_code": ctx["tenant_code"], "username": username}
+    )
+    if not admin:
+        raise HTTPException(status_code=404, detail="Admin not found")
+    pending = admin.get("totp_pending_secret")
+    if not pending:
+        raise HTTPException(status_code=400, detail="Generate authenticator setup first")
+    try:
+        secret = aauth.decrypt_totp_secret(pending)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Generate authenticator setup first")
+    if not aauth.verify_totp(secret, body.totp):
+        raise HTTPException(status_code=400, detail="Invalid authenticator code")
+    await registry.tenant_admins.update_one(
+        {"tenant_code": ctx["tenant_code"], "username": username},
+        {
+            "$set": {
+                "two_fa_enabled": True,
+                "totp_secret": pending,
+                "updated_at": _now_iso(),
+            },
+            "$unset": {"totp_pending_secret": ""},
+        },
+    )
+    return {"ok": True, "two_fa_enabled": True}
+
+
+@router.post("/admin/auth/2fa/disable")
+async def admin_2fa_disable(body: TotpIn, ctx=Depends(get_admin_ctx)):
+    username = ctx.get("username")
+    admin = await registry.tenant_admins.find_one(
+        {"tenant_code": ctx["tenant_code"], "username": username}
+    )
+    if not admin or not admin.get("two_fa_enabled"):
+        return {"ok": True, "two_fa_enabled": False}
+    enc = admin.get("totp_secret")
+    if not enc:
+        await registry.tenant_admins.update_one(
+            {"tenant_code": ctx["tenant_code"], "username": username},
+            {
+                "$set": {"two_fa_enabled": False, "updated_at": _now_iso()},
+                "$unset": {"totp_secret": "", "totp_pending_secret": ""},
+            },
+        )
+        return {"ok": True, "two_fa_enabled": False}
+    try:
+        secret = aauth.decrypt_totp_secret(enc)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Cannot verify authenticator")
+    if not aauth.verify_totp(secret, body.totp):
+        raise HTTPException(status_code=400, detail="Invalid authenticator code")
+    await registry.tenant_admins.update_one(
+        {"tenant_code": ctx["tenant_code"], "username": username},
+        {
+            "$set": {"two_fa_enabled": False, "updated_at": _now_iso()},
+            "$unset": {"totp_secret": "", "totp_pending_secret": ""},
+        },
+    )
+    return {"ok": True, "two_fa_enabled": False}
 
 
 @router.get("/admin/me")
 async def admin_me(ctx=Depends(get_admin_ctx)):
     t = ctx["tenant"]
+    username = ctx.get("username")
+    admin = None
+    if username:
+        admin = await registry.tenant_admins.find_one(
+            {"tenant_code": ctx["tenant_code"], "username": username}
+        )
     return {
         "tenant_code": ctx["tenant_code"],
         "business_name": t["business_name"],
         "role": ctx["role"],
         "status": t["status"],
-        "username": ctx.get("username"),
+        "username": username,
+        "two_fa_enabled": bool((admin or {}).get("two_fa_enabled")),
+        "phone_masked": aauth.mask_phone((admin or {}).get("phone")),
     }
 
 
@@ -269,11 +467,14 @@ async def admin_delete_category(cid: str, ctx=Depends(get_admin_ctx)):
     return {"ok": True}
 
 
-ORDER_FLOW = ["reserved", "confirmed", "packed", "shipped", "delivered", "cancelled"]
+ORDER_FLOW = ["reserved", "confirmed", "packed", "shipped", "delivered", "cancelled", "returned"]
+RETURN_FROM = {"shipped", "delivered"}
+FORWARD_FLOW = ["reserved", "confirmed", "packed", "shipped", "delivered"]
 
 
 class StatusIn(BaseModel):
     status: str
+    reason: Optional[str] = None
 
 
 @router.get("/admin/orders")
@@ -281,13 +482,55 @@ async def admin_orders(ctx=Depends(get_admin_ctx)):
     return [_clean(o) for o in await ctx["db"].orders.find({}).sort("created_at", -1).to_list(2000)]
 
 
+async def _restock_order_items(db, order: dict) -> None:
+    for it in order.get("items") or []:
+        pid = it.get("product_id")
+        if not pid:
+            continue
+        qty = int(it.get("qty") or 0)
+        if qty <= 0:
+            continue
+        await db.products.update_one({"id": str(pid)}, {"$inc": {"stock_qty": qty}})
+
+
 @router.put("/admin/orders/{oid}/status")
 async def admin_order_status(oid: str, body: StatusIn, ctx=Depends(get_admin_ctx)):
     if body.status not in ORDER_FLOW:
         raise HTTPException(status_code=400, detail="Invalid status")
-    res = await ctx["db"].orders.update_one({"id": oid}, {"$set": {"status": body.status}})
-    if res.matched_count == 0:
+    o = await ctx["db"].orders.find_one({"id": oid})
+    if not o:
         raise HTTPException(status_code=404, detail="Order not found")
+
+    current = o.get("status") or "reserved"
+    if current in ("cancelled", "returned") and body.status != current:
+        raise HTTPException(status_code=400, detail=f"Cannot change status from {current}")
+
+    update: dict = {"status": body.status}
+
+    if body.status == "returned":
+        if current == "returned":
+            return _clean(o)
+        if current not in RETURN_FROM:
+            raise HTTPException(
+                status_code=400,
+                detail="Return allowed only from shipped or delivered",
+            )
+        update["returned_at"] = _now_iso()
+        if body.reason is not None:
+            update["return_reason"] = str(body.reason).strip()[:500]
+        if not o.get("return_restocked"):
+            await _restock_order_items(ctx["db"], o)
+            update["return_restocked"] = True
+    elif body.status == "cancelled":
+        if current == "delivered":
+            raise HTTPException(status_code=400, detail="Cannot cancel a delivered order; use return")
+    else:
+        # Forward pipeline: allow jumping forward or staying; block returning to earlier steps
+        if current in FORWARD_FLOW and body.status in FORWARD_FLOW:
+            if FORWARD_FLOW.index(body.status) < FORWARD_FLOW.index(current):
+                raise HTTPException(status_code=400, detail="Cannot move order backward")
+
+    await ctx["db"].orders.update_one({"id": oid}, {"$set": update})
     return _clean(await ctx["db"].orders.find_one({"id": oid}))
 
 
@@ -697,21 +940,26 @@ class StaffIn(BaseModel):
     password: Optional[str] = None
     role: str = "staff"
     active: bool = True
+    phone: Optional[str] = None
+
+
+def _staff_public(row: dict) -> dict:
+    return {
+        "username": row["username"],
+        "role": row.get("role", "staff"),
+        "active": row.get("active", True),
+        "created_at": row.get("created_at"),
+        "phone_masked": aauth.mask_phone(row.get("phone")),
+        "phone": row.get("phone"),
+        "two_fa_enabled": bool(row.get("two_fa_enabled")),
+    }
 
 
 @router.get("/admin/staff")
 async def admin_staff_list(ctx=Depends(get_admin_ctx)):
     _require_owner(ctx)
     rows = await registry.tenant_admins.find({"tenant_code": ctx["tenant_code"]}).to_list(200)
-    return [
-        {
-            "username": r["username"],
-            "role": r.get("role", "staff"),
-            "active": r.get("active", True),
-            "created_at": r.get("created_at"),
-        }
-        for r in rows
-    ]
+    return [_staff_public(r) for r in rows]
 
 
 @router.post("/admin/staff")
@@ -720,21 +968,26 @@ async def admin_create_staff(body: StaffIn, ctx=Depends(get_admin_ctx)):
     username = body.username.strip()
     if not username or not body.password:
         raise HTTPException(status_code=400, detail="Username and password required")
+    aauth.validate_admin_password(body.password)
     if body.role not in ("owner", "staff", "manager"):
         raise HTTPException(status_code=400, detail="Invalid role")
     existing = await registry.tenant_admins.find_one({"tenant_code": ctx["tenant_code"], "username": username})
     if existing:
         raise HTTPException(status_code=409, detail="Username already exists")
+    phone = aauth.normalize_staff_phone(body.phone)
     doc = {
         "tenant_code": ctx["tenant_code"],
         "username": username,
         "role": body.role,
         "password_hash": hash_password(body.password),
         "active": True,
+        "two_fa_enabled": False,
         "created_at": _now_iso(),
     }
+    if phone:
+        doc["phone"] = phone
     await registry.tenant_admins.insert_one(doc)
-    return {"username": username, "role": body.role, "active": True}
+    return _staff_public(doc)
 
 
 @router.put("/admin/staff/{username}")
@@ -742,14 +995,26 @@ async def admin_update_staff(username: str, body: StaffIn, ctx=Depends(get_admin
     _require_owner(ctx)
     update: dict = {"role": body.role, "active": body.active}
     if body.password:
+        aauth.validate_admin_password(body.password)
         update["password_hash"] = hash_password(body.password)
+    if body.phone is not None:
+        phone = aauth.normalize_staff_phone(body.phone) if body.phone.strip() else None
+        if phone:
+            update["phone"] = phone
+        else:
+            update["phone"] = None
     res = await registry.tenant_admins.update_one(
         {"tenant_code": ctx["tenant_code"], "username": username}, {"$set": update}
     )
     if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="Staff not found")
+    if "phone" in update and update["phone"] is None:
+        await registry.tenant_admins.update_one(
+            {"tenant_code": ctx["tenant_code"], "username": username},
+            {"$unset": {"phone": ""}},
+        )
     row = await registry.tenant_admins.find_one({"tenant_code": ctx["tenant_code"], "username": username})
-    return {"username": row["username"], "role": row.get("role"), "active": row.get("active", True)}
+    return _staff_public(row)
 
 
 @router.delete("/admin/staff/{username}")
@@ -884,9 +1149,12 @@ async def admin_pos_sale(body: PosSaleIn, ctx=Depends(get_admin_ctx)):
             upsert=True,
         )
 
+    order_id = str(uuid.uuid4())
+    order_no = "POS-" + datetime.now(timezone.utc).strftime("%y%m%d") + "-" + uuid.uuid4().hex[:5].upper()
+    prefix = (ctx["tenant"].get("invoice_prefix") or ctx["tenant"].get("code") or "INV")[:8]
     order = {
-        "id": str(uuid.uuid4()),
-        "order_no": "POS-" + datetime.now(timezone.utc).strftime("%y%m%d") + "-" + uuid.uuid4().hex[:5].upper(),
+        "id": order_id,
+        "order_no": order_no,
         "channel": "offline",
         "tender": body.tender,
         "guest_id": None,
@@ -897,6 +1165,9 @@ async def admin_pos_sale(body: PosSaleIn, ctx=Depends(get_admin_ctx)):
         "address": {"line1": "In-store", "city": "", "state": None, "pincode": ""},
         "note": body.note,
         "status": "delivered",
+        "payment_status": "paid",
+        "paid_at": _now_iso(),
+        "invoice_no": f"{prefix}-{order_no}",
         "rate_locked": rate_snapshot if body.lock_rate else None,
         "created_at": _now_iso(),
     }

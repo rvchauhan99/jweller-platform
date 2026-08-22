@@ -109,14 +109,20 @@ Legend: **Done** · **Partial** · **Not started**
 
 ### Expo jeweler admin (phone)
 - Queue-first dashboard (pending orders, SIP due, low stock, rate health, **today sales online/offline**)
-- Products / categories CRUD; orders status; theme + CMS; settings
+- Products / categories CRUD; orders status + **Invoice** (paid) + **Return** (shipped/delivered → restock; admin-only); theme + CMS; settings
+- **Profile:** change password + optional TOTP; login 2FA challenge; forgot-password SMS OTP
 - Customers list/detail; SIP plans + enrollments; staff CRUD (owner); gateway keys (owner)
 - Desktop CTA for POS / purchases / CSV (web-only)
 
 ### Next.js jeweler admin (`admin/`)
 - Cookie auth (`admin_token`) + `/api/auth/*` + `/api/admin/[...path]` BFF proxy to FastAPI
-- Dense ERP: Dashboard, POS, Orders, Inventory, Customers, Gold SIP, Purchases, Reports, Branding, Staff, Settings
+- Dense ERP: Dashboard, POS, Orders (blob invoice download; admin Return), Inventory, Customers, Gold SIP, Purchases, Reports, Branding, Staff, Settings, **Profile** (password + authenticator)
+- Login: optional TOTP step; **Forgot password** (SMS OTP); Staff phone for reset delivery
 - Platform tokens (not storefront gold)
+
+### Order return (admin-only)
+- `PUT /admin/orders/{id}/status` with `{ status: "returned", reason? }` from shipped|delivered; restocks once (`return_restocked`); no Razorpay refund in v1
+- No public return API; customer Orders list shows **returned** status only
 
 ---
 
@@ -154,13 +160,16 @@ Base: `/api`. Public tenant from `X-Tenant-Host` (or Host). Admin from Bearer JW
 ### Admin
 | Method | Path |
 |--------|------|
-| POST | `/admin/auth/login` |
+| POST | `/admin/auth/login` | optional `totp`; may return `two_fa_required` |
+| POST | `/admin/auth/forgot/request` \| `/confirm` |
+| POST | `/admin/auth/change-password` |
+| POST | `/admin/auth/2fa/generate` \| `/enable` \| `/disable` |
 | GET | `/admin/me` |
 | GET | `/admin/dashboard` |
 | GET/POST/PUT/DELETE | `/admin/products`, `/admin/products/{id}` |
 | GET/POST/PUT/DELETE | `/admin/categories`, `/admin/categories/{id}` |
 | GET | `/admin/orders` |
-| PUT | `/admin/orders/{id}/status` |
+| PUT | `/admin/orders/{id}/status` | Forward pipeline + cancel; **returned** (admin-only, restock) |
 | GET | `/admin/orders/{id}/invoice` |
 | GET | `/admin/sip/enrollments` |
 | GET/POST/PUT/DELETE | `/admin/sip/plans` |

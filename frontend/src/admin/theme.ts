@@ -29,4 +29,5 @@ export const STATUS_COLOR: Record<string, string> = {
   shipped: "#0891B2",
   delivered: "#15803D",
   cancelled: "#DC2626",
+  returned: "#9A3412",
 };

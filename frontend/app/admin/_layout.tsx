@@ -9,13 +9,16 @@ function Guard({ children }: { children: React.ReactNode }) {
   const { ready, token } = useAdmin();
   const segments = useSegments();
   const router = useRouter();
-  const onLogin = segments[segments.length - 1] === "login";
+  const leaf = segments[segments.length - 1];
+  const onLogin = leaf === "login";
+  const onForgot = leaf === "forgot-password";
+  const publicAuth = onLogin || onForgot;
 
   useEffect(() => {
     if (!ready) return;
-    if (!token && !onLogin) router.replace("/admin/login");
+    if (!token && !publicAuth) router.replace("/admin/login");
     if (token && onLogin) router.replace("/admin");
-  }, [ready, token, onLogin, router]);
+  }, [ready, token, publicAuth, onLogin, router]);
 
   if (!ready) {
     return (

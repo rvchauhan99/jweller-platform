@@ -86,17 +86,27 @@ async def seed_demo():
     logger.info("Demo seed complete: %s tenants", len(tenants))
 
     # Seed owner admins with hashed passwords (idempotent — never rehash on rerun).
-    demo_admins = [("AURELIA", "owner", "Aurelia@123"), ("NOIR", "owner", "Noir@123")]
-    for code, uname, pw in demo_admins:
+    demo_admins = [
+        ("AURELIA", "owner", "Aurelia@123", "+919876543210"),
+        ("NOIR", "owner", "Noir@123", "+919876543211"),
+    ]
+    for code, uname, pw, phone in demo_admins:
         await registry.tenant_admins.update_one(
             {"tenant_code": code, "username": uname},
-            {"$setOnInsert": {
-                "tenant_code": code,
-                "username": uname,
-                "role": "owner",
-                "password_hash": hash_password(pw),
-                "created_at": _now_iso(),
-            }},
+            {
+                "$setOnInsert": {
+                    "tenant_code": code,
+                    "username": uname,
+                    "role": "owner",
+                    "password_hash": hash_password(pw),
+                    "created_at": _now_iso(),
+                },
+                "$set": {
+                    "phone": phone,
+                    "two_fa_enabled": False,
+                },
+                "$unset": {"totp_secret": "", "totp_pending_secret": ""},
+            },
             upsert=True,
         )
 

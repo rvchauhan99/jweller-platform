@@ -1,39 +1,161 @@
 @import "tailwindcss";
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   JEWELER ADMIN — PREMIUM LIGHT THEME
+   Inspired by: Stripe Dashboard · Linear · Shopify Admin
+   Palette: Warm whites, deep violet accent, warm grays
+   ═══════════════════════════════════════════════════════════════════════════ */
+
 :root {
-  --bg: #F6F7F9;
-  --surface: #ffffff;
-  --surface-alt: #F1F3F5;
-  --text: #0F172A;
-  --muted: #64748B;
-  --border: #E4E8EE;
-  --primary: #111827;
+  /* ── Surfaces ────────────────────────────────────────────────────────── */
+  --bg:             #f8f7f4;          /* warm parchment white */
+  --surface:        #ffffff;
+  --surface-alt:    #f2f1ee;          /* warm light gray */
+  --surface-raised: #ffffff;
+
+  /* ── Text ────────────────────────────────────────────────────────────── */
+  --text:   #1a1a1a;                  /* near-black for readability */
+  --muted:  #6b6b6b;                  /* medium gray */
+  --faint:  #a3a3a3;                  /* subtle labels */
+
+  /* ── Borders ─────────────────────────────────────────────────────────── */
+  --border:        #e5e3de;           /* warm border */
+  --border-strong: #d0cdc6;           /* hovered border */
+
+  /* ── Primary action (deep violet) ────────────────────────────────────── */
+  --primary:    #5b21b6;              /* violet-800 */
   --on-primary: #ffffff;
-  --accent: #2563EB;
-  --accent-soft: #EFF4FF;
-  --success: #15803D;
-  --warning: #B45309;
-  --danger: #DC2626;
+
+  /* ── Accent (violet) ─────────────────────────────────────────────────── */
+  --accent:      #7c3aed;            /* violet-600 */
+  --accent-soft: #f3eeff;            /* violet wash */
+  --accent-text: #6d28d9;            /* violet-700 */
+
+  /* ── Semantic status ─────────────────────────────────────────────────── */
+  --success:      #15803d;            /* green-700 */
+  --success-soft: #f0fdf4;           /* green-50 */
+  --warning:      #a16207;            /* amber-700 */
+  --warning-soft: #fffbeb;           /* amber-50 */
+  --danger:       #dc2626;            /* red-600 */
+  --danger-soft:  #fef2f2;           /* red-50 */
+  --info:         #0369a1;            /* sky-700 */
+  --info-soft:    #f0f9ff;           /* sky-50 */
+
+  /* ── Sidebar (light, warm, clean) ────────────────────────────────────── */
+  --sidebar-bg:          #ffffff;
+  --sidebar-text:        #4a4a4a;     /* readable gray */
+  --sidebar-muted:       #9a9a9a;     /* icons, secondary text */
+  --sidebar-active-bg:   #f3eeff;     /* soft violet wash */
+  --sidebar-active-text: #6d28d9;     /* violet for active */
+  --sidebar-border:      #eee9e5;     /* warm divider */
+  --sidebar-hover:       #f8f7f4;     /* subtle warm hover */
+
+  /* ── Elevation ───────────────────────────────────────────────────────── */
+  --shadow-xs: 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md: 0 4px 6px rgba(0,0,0,0.05), 0 2px 4px rgba(0,0,0,0.03);
+  --shadow-lg: 0 10px 15px rgba(0,0,0,0.06), 0 4px 6px rgba(0,0,0,0.03);
+  --shadow-xl: 0 20px 25px rgba(0,0,0,0.08), 0 8px 10px rgba(0,0,0,0.04);
+
+  /* ── Radius ──────────────────────────────────────────────────────────── */
+  --radius-sm: 4px;
+  --radius:    6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  /* ── Focus ring ──────────────────────────────────────────────────────── */
+  --ring: #7c3aed;
+  --ring-offset: #ffffff;
 }
 
+/* ─── Dark mode ──────────────────────────────────────────────────────────── */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg:             #0f0f11;
+    --surface:        #18181b;
+    --surface-alt:    #222225;
+    --surface-raised: #27272a;
+
+    --text:   #f4f4f5;
+    --muted:  #a1a1aa;
+    --faint:  #52525b;
+
+    --border:        #2e2e33;
+    --border-strong: #3f3f46;
+
+    --primary:    #a78bfa;
+    --on-primary: #0f0f11;
+
+    --accent:      #a78bfa;
+    --accent-soft: #1e1530;
+    --accent-text: #c4b5fd;
+
+    --success:      #4ade80;
+    --success-soft: #0a1f0f;
+    --warning:      #fbbf24;
+    --warning-soft: #1a150a;
+    --danger:       #f87171;
+    --danger-soft:  #1f0a0a;
+    --info:         #38bdf8;
+    --info-soft:    #0a1520;
+
+    --sidebar-bg:          #18181b;
+    --sidebar-text:        #d4d4d8;
+    --sidebar-muted:       #71717a;
+    --sidebar-active-bg:   #1e1530;
+    --sidebar-active-text: #c4b5fd;
+    --sidebar-border:      #27272a;
+    --sidebar-hover:       #222225;
+
+    --shadow-xs: 0 1px 2px rgba(0,0,0,0.30);
+    --shadow-sm: 0 1px 3px rgba(0,0,0,0.40), 0 1px 2px rgba(0,0,0,0.30);
+    --shadow-md: 0 4px 6px rgba(0,0,0,0.40), 0 2px 4px rgba(0,0,0,0.30);
+    --shadow-lg: 0 10px 15px rgba(0,0,0,0.50), 0 4px 6px rgba(0,0,0,0.30);
+    --shadow-xl: 0 20px 25px rgba(0,0,0,0.60), 0 8px 10px rgba(0,0,0,0.30);
+
+    --ring: #a78bfa;
+    --ring-offset: #18181b;
+  }
+}
+
+/* ─── Tailwind v4 theme bridge ───────────────────────────────────────────── */
 @theme inline {
-  --color-bg: var(--bg);
-  --color-surface: var(--surface);
-  --color-surface-alt: var(--surface-alt);
-  --color-text: var(--text);
-  --color-muted: var(--muted);
-  --color-border: var(--border);
-  --color-primary: var(--primary);
-  --color-on-primary: var(--on-primary);
-  --color-accent: var(--accent);
-  --color-accent-soft: var(--accent-soft);
-  --color-success: var(--success);
-  --color-warning: var(--warning);
-  --color-danger: var(--danger);
-  --font-sans: var(--font-inter);
+  --color-bg:           var(--bg);
+  --color-surface:      var(--surface);
+  --color-surface-alt:  var(--surface-alt);
+  --color-surface-raised: var(--surface-raised);
+  --color-text:         var(--text);
+  --color-muted:        var(--muted);
+  --color-faint:        var(--faint);
+  --color-border:       var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-primary:      var(--primary);
+  --color-on-primary:   var(--on-primary);
+  --color-accent:       var(--accent);
+  --color-accent-soft:  var(--accent-soft);
+  --color-accent-text:  var(--accent-text);
+  --color-success:      var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning:      var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --color-danger:       var(--danger);
+  --color-danger-soft:  var(--danger-soft);
+  --color-info:         var(--info);
+  --color-info-soft:    var(--info-soft);
+  --color-sidebar-bg:     var(--sidebar-bg);
+  --color-sidebar-text:   var(--sidebar-text);
+  --color-sidebar-muted:  var(--sidebar-muted);
+  --color-sidebar-active-bg:   var(--sidebar-active-bg);
+  --color-sidebar-active-text: var(--sidebar-active-text);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-hover:  var(--sidebar-hover);
+  --font-sans:          var(--font-geist-sans, var(--font-inter), ui-sans-serif, system-ui, sans-serif);
 }
 
-* {
+/* ─── Reset & base ───────────────────────────────────────────────────────── */
+*,
+*::before,
+*::after {
   box-sizing: border-box;
 }
 
@@ -46,10 +168,11 @@ body {
   margin: 0;
   background: var(--bg);
   color: var(--text);
-  font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-geist-sans, var(--font-inter), ui-sans-serif, system-ui, sans-serif);
   font-size: 14px;
-  line-height: 1.45;
+  line-height: 1.55;
   -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 a {
@@ -62,4 +185,58 @@ input,
 select,
 textarea {
   font: inherit;
+}
+
+/* ─── Focus ring system ──────────────────────────────────────────────────── */
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* ─── Scrollbar refinement ───────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+}
+
+/* ─── Skeleton animation ─────────────────────────────────────────────────── */
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+
+.skeleton {
+  background: var(--surface-alt);
+  border-radius: var(--radius);
+  animation: skeleton-pulse 1.6s ease-in-out infinite;
+}
+
+/* ─── Subtle row hover for tables ────────────────────────────────────────── */
+tbody tr {
+  transition: background 0.1s ease;
+}
+tbody tr:hover {
+  background: var(--surface-alt);
+}
+
+/* ─── Motion: respect reduced-motion ────────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
 }

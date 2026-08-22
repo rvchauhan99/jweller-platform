@@ -16,6 +16,7 @@ const NAV: { label: string; path: string; icon: keyof typeof Feather.glyphMap }[
   { label: "Staff", path: "/admin/staff", icon: "user-check" },
   { label: "Branding", path: "/admin/branding", icon: "droplet" },
   { label: "Settings", path: "/admin/settings", icon: "settings" },
+  { label: "Profile", path: "/admin/profile", icon: "user" },
 ];
 
 const isNavActive = (pathname: string, path: string) => {

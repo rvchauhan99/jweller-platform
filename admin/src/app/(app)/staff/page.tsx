@@ -21,6 +21,9 @@ interface Staff {
   role: string
   active: boolean
   created_at?: string
+  phone?: string | null
+  phone_masked?: string | null
+  two_fa_enabled?: boolean
 }
 
 const emptyForm = {
@@ -28,6 +31,7 @@ const emptyForm = {
   password: "",
   role: "staff",
   active: true,
+  phone: "",
 }
 
 export default function StaffPage() {
@@ -64,7 +68,13 @@ export default function StaffPage() {
 
   const handleOpenEdit = (s: Staff) => {
     setEditing(s)
-    setForm({ username: s.username, password: "", role: s.role, active: s.active })
+    setForm({
+      username: s.username,
+      password: "",
+      role: s.role,
+      active: s.active,
+      phone: s.phone?.replace(/^\+91/, "") || "",
+    })
     setFormError("")
     setOpen(true)
   }
@@ -74,6 +84,7 @@ export default function StaffPage() {
     setSaving(true)
     setFormError("")
     try {
+      const phone = form.phone.trim()
       if (editing) {
         await api(`/staff/${encodeURIComponent(editing.username)}`, {
           method: "PUT",
@@ -82,6 +93,7 @@ export default function StaffPage() {
             role: form.role,
             active: form.active,
             password: form.password || undefined,
+            phone,
           },
         })
       } else {
@@ -92,6 +104,7 @@ export default function StaffPage() {
             password: form.password,
             role: form.role,
             active: true,
+            phone: phone || undefined,
           },
         })
       }
@@ -132,7 +145,9 @@ export default function StaffPage() {
             <thead>
               <tr>
                 <Th>Username</Th>
+                <Th>Phone</Th>
                 <Th>Role</Th>
+                <Th>2FA</Th>
                 <Th>Active</Th>
                 <Th />
               </tr>
@@ -141,7 +156,9 @@ export default function StaffPage() {
               {rows.map((s) => (
                 <tr key={s.username}>
                   <Td className="font-medium">{s.username}</Td>
+                  <Td className="text-muted">{s.phone_masked || "—"}</Td>
                   <Td className="capitalize">{s.role}</Td>
+                  <Td>{s.two_fa_enabled ? "On" : "Off"}</Td>
                   <Td>{s.active ? "Yes" : "No"}</Td>
                   <Td>
                     <div className="flex gap-1">
@@ -195,6 +212,15 @@ export default function StaffPage() {
               required={!editing}
               value={form.password}
               onChange={(e) => setForm({ ...form, password: e.target.value })}
+            />
+          </Field>
+          <Field label="Phone (+91, for forgot password)" htmlFor="phone">
+            <Input
+              id="phone"
+              inputMode="numeric"
+              placeholder="9876543210"
+              value={form.phone}
+              onChange={(e) => setForm({ ...form, phone: e.target.value.replace(/\D/g, "").slice(0, 10) })}
             />
           </Field>
           <Field label="Role" htmlFor="role">

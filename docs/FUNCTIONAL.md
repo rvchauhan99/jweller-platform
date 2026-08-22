@@ -53,7 +53,7 @@ Login (both): tenant_code + username + password → JWT (`aud: admin`). Web stor
 |------|------|-------------|---------------|
 | Dashboard | Queue + sales split + rate health | Same | — |
 | Inventory | CRUD | Tables + CRUD | R2 images, HUID polish |
-| Online orders | List + status | Tables + status | Gateway refunds |
+| Online orders | List + status + invoice + return (restock) | Tables + invoice blob + Return | Gateway refunds; customer-initiated returns |
 | Customers | List + detail | List + detail | KYC |
 | SIP | Plans CRUD + enrollments | Same | Mandates, SMS |
 | Branding / CMS | Theme + CMS | Theme + CMS | Domain list UI |

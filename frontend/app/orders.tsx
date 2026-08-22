@@ -124,9 +124,33 @@ export default function OrdersScreen() {
             <View key={o.id} testID={`order-${o.id}`} style={[styles.card, { borderColor: theme.colors.border, backgroundColor: theme.colors.surface, borderRadius: theme.radius.lg }]}>
               <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
                 <Text style={{ fontFamily: theme.fonts.bodyMedium, color: theme.colors.text, fontSize: theme.fontSize.base }}>{o.order_no}</Text>
-                <View style={[styles.status, { borderColor: theme.colors.primary }]}>
-                  <Text style={{ fontFamily: theme.fonts.bodyMedium, color: theme.colors.primary, fontSize: theme.fontSize.sm, textTransform: "capitalize" }}>
-                    {o.payment_status === "paid" ? "paid" : o.status}
+                <View
+                  style={[
+                    styles.status,
+                    {
+                      borderColor:
+                        o.status === "returned" || o.status === "cancelled"
+                          ? theme.colors.muted
+                          : theme.colors.primary,
+                    },
+                  ]}
+                >
+                  <Text
+                    style={{
+                      fontFamily: theme.fonts.bodyMedium,
+                      color:
+                        o.status === "returned" || o.status === "cancelled"
+                          ? theme.colors.muted
+                          : theme.colors.primary,
+                      fontSize: theme.fontSize.sm,
+                      textTransform: "capitalize",
+                    }}
+                  >
+                    {o.status === "returned" || o.status === "cancelled"
+                      ? o.status
+                      : o.payment_status === "paid"
+                        ? "paid"
+                        : o.status}
                   </Text>
                 </View>
               </View>
