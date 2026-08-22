@@ -457,11 +457,26 @@ async def admin_put_cms(body: CmsIn, ctx=Depends(get_admin_ctx)):
 @router.get("/admin/settings")
 async def admin_get_settings(ctx=Depends(get_admin_ctx)):
     t = ctx["tenant"]
+    try:
+        rates_preview = _rates_payload(ctx)
+    except Exception:
+        rates_preview = None
     return {
         "business_name": t["business_name"],
         "tenant_code": t["tenant_code"],
         "subdomain": t.get("subdomain"),
-        "rate_margins": t.get("rate_margins", {"gold_pct": 0, "silver_pct": 0}),
+        "rate_margins": t.get(
+            "rate_margins",
+            {
+                "gold_pct": 0,
+                "silver_pct": 0,
+                "gold_inr_per_g": 0,
+                "silver_inr_per_g": 0,
+            },
+        ),
+        "rate_city": t.get("rate_city"),
+        "rate_state": t.get("rate_state"),
+        "rates_preview": rates_preview,
         "gstin": t.get("gstin"),
         "invoice_prefix": t.get("invoice_prefix"),
     }
@@ -472,6 +487,8 @@ class SettingsIn(BaseModel):
     gstin: Optional[str] = None
     invoice_prefix: Optional[str] = None
     rate_margins: Optional[dict] = None
+    rate_city: Optional[str] = None
+    rate_state: Optional[str] = None
 
 
 @router.put("/admin/settings")

@@ -71,7 +71,7 @@ export default function AdminDashboard() {
               )}
             </View>
             <Text style={{ fontFamily: A.font, fontSize: 12, color: data.rate_stale ? A.warning : A.muted, marginTop: 6 }}>
-              {data.rate_stale ? "⚠ Rate feed is stale (older than 15 min)" : `Live · your margin ${data.today_rate?.margin_pct ?? 0}%`}
+              {data.rate_stale ? "⚠ Rate feed is stale (older than 15 min)" : `Live · ${data.today_rate?.margin_pct ?? 0}% + ₹${data.today_rate?.margin_inr_per_g ?? 0}/g`}
             </Text>
           </View>
 

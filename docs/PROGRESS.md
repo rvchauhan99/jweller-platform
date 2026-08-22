@@ -48,7 +48,7 @@ Legend: **Done** · **Partial** · **Not started**
 | 1 Foundation | **Partial** | Registry + sites + admins + snapshots + Host resolve + admin JWT + **platform JWT + in-process provision**. No Redis (deferred). Demo seed still loads AURELIA/NOIR |
 | 2 Core admin | **Partial** | Dual admin + R2 gallery. **Platform domain list** (no DNS verify). Jeweler tax invoice PDF Done (no IRN) |
 | 3 Customer commerce | **Partial** | Catalog, search, multi-image PDP, profile, cart, OTP, Razorpay Test Checkout, jeweler tax invoice PDF |
-| 4 Rates / commodity | **Partial** | Live gold/silver + margins + rate lock TTL; **one-time metal buy → wallet** |
+| 4 Rates / commodity | **Partial** | Intl spot INR + **% + ₹/g** shop premium + rate lock; metal buy → wallet |
 | 5 SIP | **Partial** | Plans (gold/silver), enroll + **preferred_day** + **compulsory first Checkout**, UPI Autopay. KYC/SMS pending |
 | 6 Custom domains | **Partial** | Add host via platform console (`pending_dns`); DNS verify later |
 | 7 Native white-label | **Partial** | Expo bake + no store switcher **Done**. Play Store per-brand packaging **Not started** |
@@ -86,10 +86,11 @@ Legend: **Done** · **Partial** · **Not started**
 - Razorpay Test Mode runbook: [RAZORPAY_TEST_RUNBOOK.md](./RAZORPAY_TEST_RUNBOOK.md)
 
 ### Rates
-- Poller: gold-api.com + frankfurter.dev USD/INR
-- Per-tenant margin; 15 min stale; last-known fallback
+- Poller: gold-api.com + frankfurter.dev USD/INR (international spot → INR)
+- Per-tenant **% + absolute ₹/g** city premium; admin live base→sell preview; 15 min stale; last-known fallback
 - Product `live_price` / `pricing` (weight × rate × purity + making)
 - Rate lock snapshot + TTL on Razorpay order create
+- Not migrating to GoldAPI.io/IBJA for storefront (spot family; local board = tenant premium)
 
 ### SIP (customer JWT)
 - Plans, enroll (`preferred_day` 1–28), list; **first installment Checkout required at enroll**; later dues on preferred day

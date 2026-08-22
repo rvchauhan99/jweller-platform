@@ -13,7 +13,7 @@ interface DashboardData {
   low_stock_count: number
   sip_active: number
   rate_stale: boolean
-  today_rate?: { inr_per_gram: number; margin_pct?: number }
+  today_rate?: { inr_per_gram: number; margin_pct?: number; margin_inr_per_g?: number }
   sales_today?: { online: number; offline: number; total: number; order_count: number }
   recent_orders: Array<{
     id: string
@@ -127,7 +127,7 @@ export default function DashboardPage() {
           <p className={`mt-2 text-sm ${data.rate_stale ? "text-warning" : "text-muted"}`}>
             {data.rate_stale
               ? "Rate feed is stale (older than 15 min)"
-              : `Live · margin ${data.today_rate?.margin_pct ?? 0}%`}
+              : `Live · ${data.today_rate?.margin_pct ?? 0}% + ₹${data.today_rate?.margin_inr_per_g ?? 0}/g`}
           </p>
         </Panel>
         <Panel className="p-4" aria-label="Payment health">

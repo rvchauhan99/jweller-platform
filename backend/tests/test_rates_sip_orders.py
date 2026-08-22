@@ -29,29 +29,43 @@ class TestRates:
         assert d["silver"]["metal"] == "Silver"
         assert d["gold"]["margin_pct"] == 6
         assert d["silver"]["margin_pct"] == 9
+        assert d["gold"]["margin_inr_per_g"] == 100
+        assert d["silver"]["margin_inr_per_g"] == 33.5
         assert isinstance(d["gold"]["inr_per_gram"], (int, float)) and d["gold"]["inr_per_gram"] > 0
         assert isinstance(d["silver"]["inr_per_gram"], (int, float)) and d["silver"]["inr_per_gram"] > 0
+        assert d["gold"]["base_inr_per_gram"] > 0
+        assert d["silver"]["base_inr_per_gram"] > 0
         assert d["usd_inr"] > 0
+        assert d.get("rate_city") == "Hyderabad"
         assert isinstance(d["stale"], bool)
         assert d["stale"] is False  # freshly polled at startup
+        # sell = base × (1+%) + absolute ₹/g (Hyderabad-oriented silver board)
+        expected_sil = round(
+            d["silver"]["base_inr_per_gram"] * 1.09 + 33.5, 2
+        )
+        assert d["silver"]["inr_per_gram"] == pytest.approx(expected_sil, abs=0.02)
 
     def test_noir_gold_margin_is_higher(self):
         a = requests.get(f"{BASE_URL}/api/public/rates", headers=_h(AURELIA_HOST), timeout=15).json()
         n = requests.get(f"{BASE_URL}/api/public/rates", headers=_h(NOIR_HOST), timeout=15).json()
         assert n["gold"]["margin_pct"] == 7
         assert n["silver"]["margin_pct"] == 10
+        assert n["gold"]["margin_inr_per_g"] == 50
+        assert n["silver"]["margin_inr_per_g"] == 45
         # NOIR margin higher -> higher final INR/g on both metals
         assert n["gold"]["inr_per_gram"] > a["gold"]["inr_per_gram"]
         assert n["silver"]["inr_per_gram"] > a["silver"]["inr_per_gram"]
-        # usd_inr must be identical (same spot for both tenants)
+        # usd_inr / base must be identical (same spot for both tenants)
         assert n["usd_inr"] == a["usd_inr"]
+        assert n["gold"]["base_inr_per_gram"] == a["gold"]["base_inr_per_gram"]
 
     def test_rates_math_matches_margin(self):
         a = requests.get(f"{BASE_URL}/api/public/rates", headers=_h(AURELIA_HOST), timeout=15).json()
         n = requests.get(f"{BASE_URL}/api/public/rates", headers=_h(NOIR_HOST), timeout=15).json()
-        # a_gold = base * 1.06, n_gold = base * 1.07  => n/a == 1.07/1.06
-        ratio = n["gold"]["inr_per_gram"] / a["gold"]["inr_per_gram"]
-        assert abs(ratio - (1.07 / 1.06)) < 0.001, f"unexpected ratio {ratio}"
+        # sell = base * (1+pct/100) + abs
+        base = a["gold"]["base_inr_per_gram"]
+        assert a["gold"]["inr_per_gram"] == pytest.approx(base * 1.06 + 100, abs=0.02)
+        assert n["gold"]["inr_per_gram"] == pytest.approx(base * 1.07 + 50, abs=0.02)
 
 
 # -------- SIP plans / enroll / pay --------

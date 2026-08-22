@@ -1,20 +1,41 @@
 # Rates, SIP, and payments
 
-**Last updated:** 2026-08-21  
+**Last updated:** 2026-08-22  
 **Status:** Partially implemented (rates API, SIP enroll/pay/Autopay, one-time metal buy + wallet). Spec below remains the north star.
 
 ---
 
 ## Live metal rates (shared platform service)
 
-One fetcher for the whole platform. Tenants do not each call MCX/IBJA.
+One fetcher for the whole platform. Tenants do not each call MCX/IBJA/GoldAPI per request.
+
+### Provider (implemented)
+
+- **Metals:** [gold-api.com](https://api.gold-api.com) — XAU/XAG USD per troy oz (keyless).
+- **FX:** [frankfurter.dev](https://api.frankfurter.dev) — USD→INR (keyless).
+- **Not used:** GoldAPI.io / IBJA — optional later; GoldAPI INR is still international spot (same market family), not city retail boards.
+
+Poll every 5 minutes; stale after 15 minutes; last-known snapshot in Registry `rates` (`spot_latest`).
+
+### Sell rate (Indian jeweler shop board)
+
+```
+base_inr_g = (USD_oz × USD/INR) / 31.1034768
+sell_inr_g = base_inr_g × (1 + margin_pct/100) + margin_inr_per_g
+```
+
+- `margin_pct` — optional percent over international base.
+- `margin_inr_per_g` — **absolute ₹/g city/shop premium** (how jewelers match Hyderabad/Mumbai boards).
+- Optional tenant labels: `rate_city`, `rate_state` (display only).
+
+Admin settings show live **base → sell preview** so the jeweler can dial premiums without guessing.
 
 ### Behaviour
 
 1. Worker polls provider on an interval (e.g. 1–5 minutes).
-2. Persist last-known in Registry `platform_gold_rates` and Redis `rate:{metal}:{purity}`.
-3. Tenant sell rate = `base_per_gram + margin` from tenant `rate_margins` (absolute ₹/g; optional extra percent).
-4. Storefront `GET /api/public/rates` returns sell rates + `fetched_at` + `stale`.
+2. Persist last-known in Registry `rates` (`spot_latest`).
+3. Tenant sell rate = formula above from `rate_margins`.
+4. Storefront `GET /api/public/rates` returns sell + `base_inr_per_gram` + margins + `fetched_at` + `stale`.
 
 ### Stale feed
 

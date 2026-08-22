@@ -175,7 +175,14 @@ async def provision_tenant(
         "subdomain": sub,
         "status": "provisioning",
         "plan": plan,
-        "rate_margins": {"gold_pct": 6, "silver_pct": 9},
+        "rate_margins": {
+            "gold_pct": 6,
+            "silver_pct": 9,
+            "gold_inr_per_g": 100,
+            "silver_inr_per_g": 33.5,
+        },
+        "rate_city": None,
+        "rate_state": None,
         "created_at": _now(),
         "updated_at": _now(),
     }

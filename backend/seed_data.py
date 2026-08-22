@@ -220,7 +220,14 @@ def build_seed():
             "mongo_db_name": "tenant_aurelia",
             "subdomain": "aurelia",
             "status": "active",
-            "rate_margins": {"gold_pct": 6, "silver_pct": 9},
+            "rate_margins": {
+                "gold_pct": 6,
+                "silver_pct": 9,
+                "gold_inr_per_g": 100,
+                "silver_inr_per_g": 33.5,
+            },
+            "rate_city": "Hyderabad",
+            "rate_state": "Telangana",
             "created_at": _now(),
         },
         {
@@ -230,7 +237,14 @@ def build_seed():
             "mongo_db_name": "tenant_noir",
             "subdomain": "noir",
             "status": "active",
-            "rate_margins": {"gold_pct": 7, "silver_pct": 10},
+            "rate_margins": {
+                "gold_pct": 7,
+                "silver_pct": 10,
+                "gold_inr_per_g": 50,
+                "silver_inr_per_g": 45,
+            },
+            "rate_city": "Mumbai",
+            "rate_state": "Maharashtra",
             "created_at": _now(),
         },
     ]
@@ -253,7 +267,7 @@ def build_seed():
         HERO_LIGHT,
         "Timeless gold, crafted for a lifetime",
         "Since 1974, Aurelia has handcrafted heirloom gold jewellery in the heart "
-        "of Jaipur. Every piece is hallmarked, ethically sourced, and made to be "
+        "of Hyderabad. Every piece is hallmarked, ethically sourced, and made to be "
         "passed down through generations.",
         {"metal": "Gold 22K", "value": "₹ 7,180 / g", "note": "Indicative rate"},
     )

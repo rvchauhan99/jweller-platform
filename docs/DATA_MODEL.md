@@ -260,16 +260,16 @@ Singleton. See [THEMING.md](./THEMING.md).
 | `banners[]` | image, link, active |
 | `featured_product_ids[]` | |
 
-### `rate_margins`
+### `rate_margins` (on Registry `tenants`)
 
-| Field | Type |
-|-------|------|
-| `metal` | |
-| `purity` | |
-| `margin_per_gram` | decimal | or percent — pick one; **decision: absolute ₹/g markup** plus optional `margin_percent` |
-| `active` | bool |
+| Field | Type | Notes |
+|-------|------|-------|
+| `gold_pct` / `silver_pct` | number | Optional % over international base |
+| `gold_inr_per_g` / `silver_inr_per_g` | number | Absolute ₹/g city/shop premium |
 
-Sell rate = platform feed + tenant margin. Locked on the order line at confirm.
+Sell = `base_inr_g × (1 + pct/100) + absolute_inr_per_g`. Optional labels: `rate_city`, `rate_state`.
+
+Locked on the order line at confirm.
 
 ### `payment_gateway_settings`
 

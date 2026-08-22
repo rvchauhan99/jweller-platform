@@ -43,13 +43,18 @@ export default function AdminSettings() {
         business_name: settings.business_name,
         gstin: settings.gstin,
         invoice_prefix: settings.invoice_prefix,
+        rate_city: settings.rate_city || null,
+        rate_state: settings.rate_state || null,
         rate_margins: {
           gold_pct: parseFloat(settings.rate_margins?.gold_pct) || 0,
           silver_pct: parseFloat(settings.rate_margins?.silver_pct) || 0,
+          gold_inr_per_g: parseFloat(settings.rate_margins?.gold_inr_per_g) || 0,
+          silver_inr_per_g: parseFloat(settings.rate_margins?.silver_inr_per_g) || 0,
         },
       }),
     });
     flash("Settings saved");
+    await load();
   };
 
   const saveCms = async () => {
@@ -85,16 +90,50 @@ export default function AdminSettings() {
   const setMargin = (k: string, v: string) => setSettings((p: any) => ({ ...p, rate_margins: { ...p.rate_margins, [k]: v } }));
   const setC = (k: string, v: any) => setCms((p: any) => ({ ...p, [k]: v }));
 
+  const preview = settings.rates_preview;
+  const goldPct = parseFloat(settings.rate_margins?.gold_pct) || 0;
+  const silverPct = parseFloat(settings.rate_margins?.silver_pct) || 0;
+  const goldAbs = parseFloat(settings.rate_margins?.gold_inr_per_g) || 0;
+  const silverAbs = parseFloat(settings.rate_margins?.silver_inr_per_g) || 0;
+  const livePreview = (metal: "gold" | "silver") => {
+    if (!preview?.[metal]?.base_inr_per_gram) return null;
+    const base = preview[metal].base_inr_per_gram;
+    const pct = metal === "gold" ? goldPct : silverPct;
+    const abs = metal === "gold" ? goldAbs : silverAbs;
+    return Math.round((base * (1 + pct / 100) + abs) * 100) / 100;
+  };
+
   return (
     <AdminShell title="Settings" subtitle={savedMsg ?? "Business profile, rate margins & storefront content"}>
-      <Text style={styles.section}>Rate margins</Text>
+      <Text style={styles.section}>Rate margins (shop board)</Text>
       <View style={styles.panel}>
         <Text style={{ fontFamily: A.font, fontSize: 12, color: A.muted, marginBottom: 10 }}>
-          Your sell price = live metal rate + this margin %. Applied to storefront pricing and SIP accrual.
+          Sell = international spot (INR/g) × (1 + %) + absolute ₹/g city premium. Dial absolute ₹ to match your local board (e.g. Hyderabad silver).
         </Text>
+        {preview ? (
+          <View style={{ marginBottom: 12, padding: 10, backgroundColor: A.bg, borderRadius: A.radiusSm, borderWidth: 1, borderColor: A.border }} testID="rates-preview">
+            <Text style={{ fontFamily: A.fontMed, fontSize: 12, color: A.text, marginBottom: 6 }}>
+              Live preview{settings.rate_city ? ` · ${settings.rate_city}` : ""}
+            </Text>
+            <Text style={{ fontFamily: A.font, fontSize: 12, color: A.muted }}>
+              Gold base ₹{preview.gold.base_inr_per_gram}/g → sell ₹{livePreview("gold") ?? preview.gold.inr_per_gram}/g
+            </Text>
+            <Text style={{ fontFamily: A.font, fontSize: 12, color: A.muted, marginTop: 4 }}>
+              Silver base ₹{preview.silver.base_inr_per_gram}/g → sell ₹{livePreview("silver") ?? preview.silver.inr_per_gram}/g
+            </Text>
+          </View>
+        ) : null}
         <View style={{ flexDirection: "row", gap: 12 }}>
-          <Field label="Gold margin %" style={{ flex: 1 }}><Inp testID="margin-gold" keyboardType="decimal-pad" value={String(settings.rate_margins?.gold_pct ?? 0)} onChangeText={(v: string) => setMargin("gold_pct", v)} /></Field>
-          <Field label="Silver margin %" style={{ flex: 1 }}><Inp testID="margin-silver" keyboardType="decimal-pad" value={String(settings.rate_margins?.silver_pct ?? 0)} onChangeText={(v: string) => setMargin("silver_pct", v)} /></Field>
+          <Field label="Gold %" style={{ flex: 1 }}><Inp testID="margin-gold" keyboardType="decimal-pad" value={String(settings.rate_margins?.gold_pct ?? 0)} onChangeText={(v: string) => setMargin("gold_pct", v)} /></Field>
+          <Field label="Gold +₹/g" style={{ flex: 1 }}><Inp testID="margin-gold-abs" keyboardType="decimal-pad" value={String(settings.rate_margins?.gold_inr_per_g ?? 0)} onChangeText={(v: string) => setMargin("gold_inr_per_g", v)} /></Field>
+        </View>
+        <View style={{ flexDirection: "row", gap: 12 }}>
+          <Field label="Silver %" style={{ flex: 1 }}><Inp testID="margin-silver" keyboardType="decimal-pad" value={String(settings.rate_margins?.silver_pct ?? 0)} onChangeText={(v: string) => setMargin("silver_pct", v)} /></Field>
+          <Field label="Silver +₹/g" style={{ flex: 1 }}><Inp testID="margin-silver-abs" keyboardType="decimal-pad" value={String(settings.rate_margins?.silver_inr_per_g ?? 0)} onChangeText={(v: string) => setMargin("silver_inr_per_g", v)} /></Field>
+        </View>
+        <View style={{ flexDirection: "row", gap: 12 }}>
+          <Field label="Rate city" style={{ flex: 1 }}><Inp testID="rate-city" value={settings.rate_city || ""} onChangeText={(v: string) => setS("rate_city", v)} /></Field>
+          <Field label="Rate state" style={{ flex: 1 }}><Inp testID="rate-state" value={settings.rate_state || ""} onChangeText={(v: string) => setS("rate_state", v)} /></Field>
         </View>
       </View>
 

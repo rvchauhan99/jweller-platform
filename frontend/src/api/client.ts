@@ -132,15 +132,20 @@ export const getProduct = (code: string, id: string) => apiGet<Product>(`/public
 export interface MetalRate {
   metal: string;
   inr_per_gram: number;
+  base_inr_per_gram: number;
   margin_pct: number;
+  margin_inr_per_g: number;
 }
 export interface Rates {
   gold: MetalRate;
   silver: MetalRate;
   usd_inr: number;
+  rate_city?: string | null;
+  rate_state?: string | null;
   fetched_at: string;
   stale: boolean;
   currency: string;
+  note?: string;
 }
 export const getRates = (code: string) => apiGet<Rates>("/public/rates", code);
 

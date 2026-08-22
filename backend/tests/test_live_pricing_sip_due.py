@@ -143,12 +143,18 @@ class TestLivePricing:
         a_rate = aur["pricing"]["rate_per_gram"]
         n_rate = noi["pricing"]["rate_per_gram"]
 
-        # NOIR gold margin 7% > AURELIA 6% => higher rate_per_gram
+        # NOIR: higher % and +₹50/g absolute => higher rate_per_gram
         assert n_rate > a_rate, (
             f"NOIR rate_per_gram ({n_rate}) should exceed AURELIA ({a_rate})"
         )
-        ratio = n_rate / a_rate
-        assert abs(ratio - (1.07 / 1.06)) < 0.001, f"unexpected ratio {ratio}"
+        rates_a = requests.get(
+            f"{BASE_URL}/api/public/rates", headers=_h(AURELIA_HOST), timeout=15
+        ).json()
+        rates_n = requests.get(
+            f"{BASE_URL}/api/public/rates", headers=_h(NOIR_HOST), timeout=15
+        ).json()
+        assert n_rate == pytest.approx(rates_n["gold"]["inr_per_gram"], abs=0.02)
+        assert a_rate == pytest.approx(rates_a["gold"]["inr_per_gram"], abs=0.02)
 
         # NOIR live_price also higher (making is identical, metal_value differs)
         assert noi["live_price"] > aur["live_price"]

@@ -153,34 +153,58 @@ async def _spot_poller():
         await asyncio.sleep(POLL_SECONDS)
 
 
-def _inr_per_gram(usd_oz: str, usd_inr: str, margin_pct: Decimal) -> float:
-    base = Decimal(usd_oz) * Decimal(usd_inr) / GRAMS_PER_TROY_OZ
-    val = base * (Decimal("1") + margin_pct / Decimal("100"))
+def _base_inr_per_gram(usd_oz: str, usd_inr: str) -> Decimal:
+    return (Decimal(usd_oz) * Decimal(usd_inr) / GRAMS_PER_TROY_OZ).quantize(
+        Decimal("0.01"), rounding=ROUND_HALF_UP
+    )
+
+
+def _margin_parts(margins: dict, metal: str) -> tuple[Decimal, Decimal]:
+    """Return (percent, absolute ₹/g) for gold|silver. Absolute = local/city premium."""
+    margins = margins or {}
+    pct = Decimal(str(margins.get(f"{metal}_pct", 0) or 0))
+    abs_inr = Decimal(str(margins.get(f"{metal}_inr_per_g", 0) or 0))
+    return pct, abs_inr
+
+
+def _sell_inr_per_gram(base: Decimal, margin_pct: Decimal, margin_inr: Decimal) -> float:
+    """Sell = international base × (1 + %) + absolute ₹/g city premium."""
+    val = base * (Decimal("1") + margin_pct / Decimal("100")) + margin_inr
     return float(val.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP))
 
 
 def _rates_payload(ctx: dict) -> dict:
     if not _spot:
         raise HTTPException(status_code=503, detail="Rate feed temporarily unavailable")
-    margins = (ctx["tenant"].get("rate_margins") or {}) if ctx else {}
-    gold_m = Decimal(str(margins.get("gold_pct", 0)))
-    silver_m = Decimal(str(margins.get("silver_pct", 0)))
+    tenant = (ctx.get("tenant") or {}) if ctx else {}
+    margins = tenant.get("rate_margins") or {}
+    gold_base = _base_inr_per_gram(_spot["xau_usd_oz"], _spot["usd_inr"])
+    silver_base = _base_inr_per_gram(_spot["xag_usd_oz"], _spot["usd_inr"])
+    gold_pct, gold_abs = _margin_parts(margins, "gold")
+    silver_pct, silver_abs = _margin_parts(margins, "silver")
     fetched_at = _spot["fetched_at"]
     return {
         "gold": {
             "metal": "Gold",
-            "inr_per_gram": _inr_per_gram(_spot["xau_usd_oz"], _spot["usd_inr"], gold_m),
-            "margin_pct": float(gold_m),
+            "inr_per_gram": _sell_inr_per_gram(gold_base, gold_pct, gold_abs),
+            "base_inr_per_gram": float(gold_base),
+            "margin_pct": float(gold_pct),
+            "margin_inr_per_g": float(gold_abs),
         },
         "silver": {
             "metal": "Silver",
-            "inr_per_gram": _inr_per_gram(_spot["xag_usd_oz"], _spot["usd_inr"], silver_m),
-            "margin_pct": float(silver_m),
+            "inr_per_gram": _sell_inr_per_gram(silver_base, silver_pct, silver_abs),
+            "base_inr_per_gram": float(silver_base),
+            "margin_pct": float(silver_pct),
+            "margin_inr_per_g": float(silver_abs),
         },
         "usd_inr": float(Decimal(_spot["usd_inr"])),
+        "rate_city": tenant.get("rate_city"),
+        "rate_state": tenant.get("rate_state"),
         "fetched_at": fetched_at,
         "stale": _is_stale(fetched_at),
         "currency": "₹",
+        "note": "International spot in INR + your shop premium",
     }
 
 

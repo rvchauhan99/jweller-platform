@@ -106,7 +106,7 @@ Rules:
 | GET | `/api/public/categories` | no | |
 | GET | `/api/public/products` | no | Listed online only; pagination, filters |
 | GET | `/api/public/products/{id}` | no | |
-| GET | `/api/public/rates` | no | Tenant sell rates (feed + margin) + `fetched_at` |
+| GET | `/api/public/rates` | no | Intl spot INR + tenant % + ₹/g premium + `fetched_at` |
 
 ### Auth
 

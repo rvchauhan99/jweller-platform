@@ -8,7 +8,18 @@ interface Settings {
   business_name: string
   tenant_code: string
   subdomain?: string
-  rate_margins?: { gold_pct?: number; silver_pct?: number }
+  rate_margins?: {
+    gold_pct?: number
+    silver_pct?: number
+    gold_inr_per_g?: number
+    silver_inr_per_g?: number
+  }
+  rate_city?: string | null
+  rate_state?: string | null
+  rates_preview?: {
+    gold: { base_inr_per_gram: number; inr_per_gram: number }
+    silver: { base_inr_per_gram: number; inr_per_gram: number }
+  } | null
   gstin?: string
   invoice_prefix?: string
 }
@@ -75,6 +86,8 @@ export default function SettingsPage() {
           gstin: settings.gstin,
           invoice_prefix: settings.invoice_prefix,
           rate_margins: settings.rate_margins,
+          rate_city: settings.rate_city || null,
+          rate_state: settings.rate_state || null,
         },
       })
       await api("/cms", {
@@ -97,6 +110,7 @@ export default function SettingsPage() {
         setGateway(await api<Gateway>("/gateway"))
       }
       setMessage("Settings saved.")
+      setSettings(await api<Settings>("/settings"))
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed")
     } finally {
@@ -143,7 +157,40 @@ export default function SettingsPage() {
         </Panel>
 
         <Panel className="space-y-3 p-4">
-          <h2 className="text-sm font-semibold">Rate margins (%)</h2>
+          <h2 className="text-sm font-semibold">Rate margins (shop board)</h2>
+          <p className="text-xs text-muted">
+            Sell = international spot (INR/g) × (1 + %) + absolute ₹/g city premium. Use +₹/g to match your local board.
+          </p>
+          {settings.rates_preview ? (
+            <div
+              className="rounded-md border border-[var(--border)] bg-[var(--bg)] p-3 text-xs text-muted"
+              aria-label="Live rate preview"
+            >
+              <p className="font-medium text-text">
+                Live preview{settings.rate_city ? ` · ${settings.rate_city}` : ""}
+              </p>
+              <p className="mt-1">
+                Gold base ₹{settings.rates_preview.gold.base_inr_per_gram}/g → sell ₹
+                {Math.round(
+                  (settings.rates_preview.gold.base_inr_per_gram *
+                    (1 + (settings.rate_margins?.gold_pct ?? 0) / 100) +
+                    (settings.rate_margins?.gold_inr_per_g ?? 0)) *
+                    100
+                ) / 100}
+                /g
+              </p>
+              <p className="mt-1">
+                Silver base ₹{settings.rates_preview.silver.base_inr_per_gram}/g → sell ₹
+                {Math.round(
+                  (settings.rates_preview.silver.base_inr_per_gram *
+                    (1 + (settings.rate_margins?.silver_pct ?? 0) / 100) +
+                    (settings.rate_margins?.silver_inr_per_g ?? 0)) *
+                    100
+                ) / 100}
+                /g
+              </p>
+            </div>
+          ) : null}
           <div className="grid gap-3 sm:grid-cols-2">
             <Field label="Gold %" htmlFor="gold_pct">
               <Input
@@ -157,6 +204,23 @@ export default function SettingsPage() {
                     rate_margins: {
                       ...settings.rate_margins,
                       gold_pct: Number(e.target.value),
+                    },
+                  })
+                }
+              />
+            </Field>
+            <Field label="Gold +₹/g" htmlFor="gold_inr_per_g">
+              <Input
+                id="gold_inr_per_g"
+                type="number"
+                step="0.01"
+                value={settings.rate_margins?.gold_inr_per_g ?? 0}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    rate_margins: {
+                      ...settings.rate_margins,
+                      gold_inr_per_g: Number(e.target.value),
                     },
                   })
                 }
@@ -177,6 +241,37 @@ export default function SettingsPage() {
                     },
                   })
                 }
+              />
+            </Field>
+            <Field label="Silver +₹/g" htmlFor="silver_inr_per_g">
+              <Input
+                id="silver_inr_per_g"
+                type="number"
+                step="0.01"
+                value={settings.rate_margins?.silver_inr_per_g ?? 0}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    rate_margins: {
+                      ...settings.rate_margins,
+                      silver_inr_per_g: Number(e.target.value),
+                    },
+                  })
+                }
+              />
+            </Field>
+            <Field label="Rate city" htmlFor="rate_city">
+              <Input
+                id="rate_city"
+                value={settings.rate_city || ""}
+                onChange={(e) => setSettings({ ...settings, rate_city: e.target.value })}
+              />
+            </Field>
+            <Field label="Rate state" htmlFor="rate_state">
+              <Input
+                id="rate_state"
+                value={settings.rate_state || ""}
+                onChange={(e) => setSettings({ ...settings, rate_state: e.target.value })}
               />
             </Field>
           </div>
