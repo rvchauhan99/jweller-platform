@@ -1,7 +1,8 @@
 import React from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Platform, StyleSheet, Text, View } from "react-native";
 import { Image } from "expo-image";
 
+import { FadeInView } from "@/src/components/FadeInView";
 import { useStore } from "@/src/theme/StoreProvider";
 
 function initials(name: string): string {
@@ -24,45 +25,78 @@ export function BrandMark({
   const { theme, businessName, logoUrl } = useStore();
   const fg = onDark ? "#FFFFFF" : theme.colors.headerText;
   const border = onDark ? "rgba(255,255,255,0.55)" : theme.colors.border;
-  const mono = compact ? 30 : 40;
+  const mono = compact ? 32 : 42;
 
   if (logoUrl) {
     return (
-      <Image
-        testID="brand-logo"
-        source={{ uri: logoUrl }}
-        style={{ height: compact ? 28 : 40, width: compact ? 120 : 160 }}
-        contentFit="contain"
-        accessibilityLabel={businessName}
-      />
+      <FadeInView direction="fade" duration={400}>
+        <Image
+          testID="brand-logo"
+          source={{ uri: logoUrl }}
+          style={{ height: compact ? 28 : 40, width: compact ? 120 : 160 }}
+          contentFit="contain"
+          accessibilityLabel={businessName}
+        />
+      </FadeInView>
     );
   }
 
   return (
-    <View style={styles.row} testID="brand-mark">
-      <View style={[styles.mono, { width: mono, height: mono, borderColor: border }]}>
-        <Text style={{ fontFamily: theme.fonts.headingBold, color: fg, fontSize: compact ? 14 : 18 }}>
-          {initials(businessName)}
+    <FadeInView direction="fade" duration={400}>
+      <View style={styles.row} testID="brand-mark">
+        <View
+          style={[
+            styles.mono,
+            {
+              width: mono,
+              height: mono,
+              borderColor: border,
+              ...Platform.select({
+                ios: {
+                  shadowColor: onDark ? "#000" : theme.colors.text,
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.08,
+                  shadowRadius: 6,
+                },
+                android: { elevation: 2 },
+              }),
+            },
+          ]}
+        >
+          <Text
+            style={{
+              fontFamily: theme.fonts.headingBold,
+              color: fg,
+              fontSize: compact ? 14 : 18,
+            }}
+          >
+            {initials(businessName)}
+          </Text>
+        </View>
+        <Text
+          numberOfLines={1}
+          style={{
+            fontFamily: theme.fonts.body,
+            color: fg,
+            fontSize: compact ? theme.fontSize.sm : theme.fontSize.base,
+            letterSpacing: 2.5,
+            marginLeft: theme.spacing.sm + 2,
+            maxWidth: 210,
+          }}
+        >
+          {(businessName || "").toUpperCase()}
         </Text>
       </View>
-      <Text
-        numberOfLines={1}
-        style={{
-          fontFamily: theme.fonts.body,
-          color: fg,
-          fontSize: compact ? theme.fontSize.sm : theme.fontSize.base,
-          letterSpacing: 2,
-          marginLeft: theme.spacing.sm,
-          maxWidth: 210,
-        }}
-      >
-        {(businessName || "").toUpperCase()}
-      </Text>
-    </View>
+    </FadeInView>
   );
 }
 
 const styles = StyleSheet.create({
   row: { flexDirection: "row", alignItems: "center" },
-  mono: { borderRadius: 999, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  mono: {
+    borderRadius: 999,
+    borderWidth: 1.2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
 });

@@ -1,5 +1,13 @@
-import React, { useEffect, useRef } from "react";
-import { Animated, StyleSheet, View, ViewStyle } from "react-native";
+import React, { useEffect } from "react";
+import { StyleSheet, View, ViewStyle } from "react-native";
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
+  Easing,
+} from "react-native-reanimated";
 
 import { useTheme } from "@/src/theme/StoreProvider";
 
@@ -12,23 +20,33 @@ interface Props {
 
 export function Skeleton({ width = "100%", height = 16, radius = 4, style }: Props) {
   const theme = useTheme();
-  const opacity = useRef(new Animated.Value(0.4)).current;
+  const opacity = useSharedValue(0.35);
 
   useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(opacity, { toValue: 0.9, duration: 700, useNativeDriver: true }),
-        Animated.timing(opacity, { toValue: 0.4, duration: 700, useNativeDriver: true }),
-      ])
+    opacity.value = withRepeat(
+      withSequence(
+        withTiming(0.85, { duration: 750, easing: Easing.inOut(Easing.ease) }),
+        withTiming(0.35, { duration: 750, easing: Easing.inOut(Easing.ease) }),
+      ),
+      -1,
+      false,
     );
-    loop.start();
-    return () => loop.stop();
   }, [opacity]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+  }));
 
   return (
     <Animated.View
       style={[
-        { width, height, borderRadius: radius, backgroundColor: theme.colors.border, opacity },
+        {
+          width: width as any,
+          height: height as any,
+          borderRadius: radius,
+          backgroundColor: theme.colors.border,
+        },
+        animatedStyle,
         style as any,
       ]}
     />
@@ -39,7 +57,10 @@ export function ProductCardSkeleton() {
   const theme = useTheme();
   return (
     <View style={{ flex: 1 }}>
-      <Skeleton height={undefined as any} style={{ aspectRatio: 4 / 5, borderRadius: theme.radius.lg }} />
+      <Skeleton
+        height={undefined as any}
+        style={{ aspectRatio: 4 / 5, borderRadius: theme.radius.lg } as any}
+      />
       <View style={{ height: theme.spacing.sm }} />
       <Skeleton width="80%" height={13} />
       <View style={{ height: 6 }} />

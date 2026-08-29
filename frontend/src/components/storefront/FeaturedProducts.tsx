@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from "react"
 import { Text, View, useWindowDimensions } from "react-native"
 
 import { getProducts, Product } from "@/src/api/client"
+import { FadeInView } from "@/src/components/FadeInView"
 import { ProductCard } from "@/src/components/ProductCard"
 import { ProductCardSkeleton } from "@/src/components/Skeleton"
 import { useStore } from "@/src/theme/StoreProvider"
@@ -35,30 +36,37 @@ export function FeaturedProducts({ tenantCode }: FeaturedProductsProps) {
   }, [load])
 
   return (
-    <View style={{ marginTop: theme.spacing["2xl"], paddingHorizontal: theme.spacing.lg }} testID="shop-featured">
-      <Text
-        style={{
-          fontFamily: theme.fonts.heading,
-          fontSize: theme.fontSize["2xl"],
-          color: theme.colors.text,
-          marginBottom: theme.spacing.md,
-        }}
+    <FadeInView direction="up" delay={200} duration={450}>
+      <View
+        style={{ marginTop: theme.spacing["2xl"], paddingHorizontal: theme.spacing.lg }}
+        testID="shop-featured"
       >
-        Featured Pieces
-      </Text>
-      <View style={{ flexDirection: "row", flexWrap: "wrap", gap }}>
-        {loading
-          ? [0, 1, 2, 3].map((i) => (
-              <View key={i} style={{ width: cardW }}>
-                <ProductCardSkeleton />
-              </View>
-            ))
-          : featured.map((p) => (
-              <View key={p.id} style={{ width: cardW }}>
-                <ProductCard product={p} />
-              </View>
-            ))}
+        <Text
+          style={{
+            fontFamily: theme.fonts.heading,
+            fontSize: theme.fontSize["2xl"],
+            color: theme.colors.text,
+            marginBottom: theme.spacing.md,
+          }}
+        >
+          Featured Pieces
+        </Text>
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap }}>
+          {loading
+            ? [0, 1, 2, 3].map((i) => (
+                <View key={i} style={{ width: cardW }}>
+                  <ProductCardSkeleton />
+                </View>
+              ))
+            : featured.map((p, idx) => (
+                <FadeInView key={p.id} delay={idx * 60} direction="up" duration={350}>
+                  <View style={{ width: cardW }}>
+                    <ProductCard product={p} />
+                  </View>
+                </FadeInView>
+              ))}
+        </View>
       </View>
-    </View>
+    </FadeInView>
   )
 }
