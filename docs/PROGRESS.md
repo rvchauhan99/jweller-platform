@@ -1,7 +1,7 @@
 # Implementation progress
 
-**Last updated:** 2026-08-22  
-**Status:** Living checklist for **this monorepo** (`jweller-platform`). Cloud Run Test Mode API: see [OPERATIONS.md](./OPERATIONS.md).
+**Last updated:** 2026-08-29  
+**Status:** Living checklist for **this monorepo** (`jweller-platform`). Demo API on Vultr: [`deploy/vultr/`](../deploy/vultr/README.md) (auto-deploy on `main`).
 
 ## Where things live
 
@@ -31,6 +31,7 @@
 | Payments | **Razorpay Model B** Checkout + **SIP UPI Autopay** (mock + live client) | Live Mode go-live; production Autopay webhooks |
 | Tenancy | Host / `X-Tenant-Host` → Registry → tenant DB | Unchanged |
 | Tests | pytest storefront / rates / SIP / orders / **OTP** / **Razorpay** | Keep + expand admin coverage |
+| Deploy (demo API) | **GitHub Actions** → Vultr on push to `main` (`backend/`, `deploy/vultr/`) | HTTPS / production hardening later |
 
 **Stance:** Expo is the shipped customer surface. Jeweler admin is **dual**: Expo for phone queue/ops, Next.js for dense web ERP (POS, purchases, CSV). Do **not** deprecate Expo admin.
 
@@ -69,7 +70,7 @@ Legend: **Done** · **Partial** · **Not started**
 
 ### Storefront (Expo)
 - Bootstrap + theme tokens (no hardcoded brand colors on the UI path)
-- Home: **live e-rates** (gold /10g, silver /kg) + **savings summary** (`GET /public/savings/summary`) + SIP preview; Start SIP / one-time buy CTAs
+- Home: **live e-rates** (gold /10g, silver /kg) + **savings summary** (`GET /public/savings/summary`) + SIP preview; Start SIP / one-time buy CTAs; client fallback if API not yet deployed
 - Shop tab (`collections`): hero, categories, featured, about (former catalog home)
 - Collections, **search**, category filters, product detail (multi-image)
 - Account: profile edit / sign out / orders shortcut

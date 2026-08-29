@@ -1,0 +1,78 @@
+name: Deploy API to Vultr
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "backend/**"
+      - "deploy/vultr/**"
+      - ".github/workflows/deploy-vultr-api.yml"
+
+concurrency:
+  group: deploy-vultr-api
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure SSH
+        env:
+          VULTR_HOST: ${{ secrets.VULTR_HOST }}
+          VULTR_SSH_PRIVATE_KEY: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$VULTR_SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H "$VULTR_HOST" >> ~/.ssh/known_hosts
+
+      - name: Rsync backend
+        env:
+          VULTR_HOST: ${{ secrets.VULTR_HOST }}
+          VULTR_SSH_USER: ${{ secrets.VULTR_SSH_USER }}
+        run: |
+          rsync -avz --delete \
+            --exclude '__pycache__' \
+            --exclude '.env' \
+            --exclude 'tests' \
+            --exclude '.pytest_cache' \
+            -e "ssh -o StrictHostKeyChecking=yes" \
+            backend/ "${VULTR_SSH_USER}@${VULTR_HOST}:/opt/jweller/backend/"
+
+      - name: Rsync deploy config
+        env:
+          VULTR_HOST: ${{ secrets.VULTR_HOST }}
+          VULTR_SSH_USER: ${{ secrets.VULTR_SSH_USER }}
+        run: |
+          rsync -avz \
+            --exclude '.env' \
+            -e "ssh -o StrictHostKeyChecking=yes" \
+            deploy/vultr/ "${VULTR_SSH_USER}@${VULTR_HOST}:/opt/jweller/deploy/"
+
+      - name: Build and restart API
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.VULTR_HOST }}
+          username: ${{ secrets.VULTR_SSH_USER }}
+          key: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
+          script: bash /opt/jweller/deploy/deploy-remote.sh
+
+      - name: Post-deploy smoke
+        env:
+          VULTR_HOST: ${{ secrets.VULTR_HOST }}
+        run: |
+          set -euo pipefail
+          curl -sf "http://${VULTR_HOST}/api/" | grep -q '"status":"ok"'
+          curl -sf -H "X-Tenant-Host: aurelia.luxejewel.app" \
+            "http://${VULTR_HOST}/api/public/bootstrap" | grep -q '"tenant_code"'
+          code=$(curl -s -o /dev/null -w '%{http_code}' \
+            -H "X-Tenant-Host: aurelia.luxejewel.app" \
+            "http://${VULTR_HOST}/api/public/savings/summary")
+          if [ "$code" != "401" ]; then
+            echo "Expected savings/summary to return 401 (auth required), got $code"
+            exit 1
+          fi
+          echo "Smoke checks passed (savings route live: HTTP $code)"

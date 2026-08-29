@@ -10,7 +10,9 @@ import { formatMoney } from "@/src/theme/tokens"
 interface SavingsSummaryPanelProps {
   summary: SavingsSummary | null
   loading?: boolean
+  error?: string | null
   signedIn: boolean
+  onRetry?: () => void
 }
 
 function StatBlock({ label, value, tone }: { label: string; value: string; tone?: "up" | "down" | "neutral" }) {
@@ -25,7 +27,7 @@ function StatBlock({ label, value, tone }: { label: string; value: string; tone?
   )
 }
 
-export function SavingsSummaryPanel({ summary, loading, signedIn }: SavingsSummaryPanelProps) {
+export function SavingsSummaryPanel({ summary, loading, error, signedIn, onRetry }: SavingsSummaryPanelProps) {
   const { theme } = useStore()
   const router = useRouter()
 
@@ -52,7 +54,7 @@ export function SavingsSummaryPanel({ summary, loading, signedIn }: SavingsSumma
     )
   }
 
-  if (loading || !summary) {
+  if (loading) {
     return (
       <View
         testID="savings-summary-loading"
@@ -63,6 +65,39 @@ export function SavingsSummaryPanel({ summary, loading, signedIn }: SavingsSumma
         </Text>
       </View>
     )
+  }
+
+  if (error) {
+    return (
+      <View
+        testID="savings-summary-error"
+        style={[styles.panel, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, borderRadius: theme.radius.lg }]}
+      >
+        <Text style={{ fontFamily: theme.fonts.bodyMedium, color: theme.colors.text, fontSize: theme.fontSize.base }}>
+          Could not load savings
+        </Text>
+        <Text style={{ fontFamily: theme.fonts.body, color: theme.colors.muted, fontSize: theme.fontSize.sm, marginTop: theme.spacing.xs }}>
+          {error}
+        </Text>
+        {onRetry ? (
+          <Pressable
+            testID="savings-summary-retry"
+            onPress={onRetry}
+            style={{ marginTop: theme.spacing.md, alignSelf: "flex-start" }}
+            accessibilityRole="button"
+            accessibilityLabel="Retry loading savings"
+          >
+            <Text style={{ fontFamily: theme.fonts.bodyMedium, color: theme.colors.primary, fontSize: theme.fontSize.sm }}>
+              Retry
+            </Text>
+          </Pressable>
+        ) : null}
+      </View>
+    )
+  }
+
+  if (!summary) {
+    return null
   }
 
   const hasHoldings = summary.total_invested > 0 || summary.gold_grams > 0 || summary.silver_grams > 0

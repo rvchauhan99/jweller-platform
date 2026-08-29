@@ -4,7 +4,7 @@ import { useFocusEffect, useRouter } from "expo-router"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import Feather from "@expo/vector-icons/Feather"
 
-import { getRates, getSavingsSummary, getSipPlans, Rates, SavingsSummary, SipPlan } from "@/src/api/client"
+import { ApiError, getMetalWallet, getRates, getSavingsSummary, getSipEnrollments, getSipPlans, Rates, SavingsSummary, SipPlan } from "@/src/api/client"
 import { BrandMark } from "@/src/components/BrandMark"
 import { HeaderIcons } from "@/src/components/HeaderIcons"
 import { LoadingView, MessageView } from "@/src/components/StateViews"
@@ -16,6 +16,7 @@ import { useCustomerAuth } from "@/src/context/CustomerAuthContext"
 import { useSipReminders } from "@/src/context/SipRemindersContext"
 import { useStore } from "@/src/theme/StoreProvider"
 import { formatMoney } from "@/src/theme/tokens"
+import { computeSavingsSummary } from "@/src/utils/computeSavingsSummary"
 
 export default function HomeScreen() {
   const { code, status, theme, businessName, sections, errorMessage, reload } = useStore()
@@ -28,6 +29,7 @@ export default function HomeScreen() {
   const [plans, setPlans] = useState<SipPlan[]>([])
   const [summary, setSummary] = useState<SavingsSummary | null>(null)
   const [summaryLoading, setSummaryLoading] = useState(false)
+  const [summaryError, setSummaryError] = useState<string | null>(null)
   const [metal, setMetal] = useState<MetalFilter>("gold")
   const [loading, setLoading] = useState(true)
   const [reminderDismissed, setReminderDismissed] = useState(false)
@@ -53,13 +55,30 @@ export default function HomeScreen() {
   const loadSummary = useCallback(async () => {
     if (!token) {
       setSummary(null)
+      setSummaryError(null)
       return
     }
     setSummaryLoading(true)
+    setSummaryError(null)
     try {
       setSummary(await getSavingsSummary(code))
-    } catch {
-      setSummary(null)
+    } catch (e: unknown) {
+      if (e instanceof ApiError && e.status === 404) {
+        try {
+          const [enrollments, wallet, ratesRes] = await Promise.all([
+            getSipEnrollments(code),
+            getMetalWallet(code),
+            getRates(code),
+          ])
+          setSummary(computeSavingsSummary(enrollments, wallet, ratesRes))
+        } catch (fallbackErr: unknown) {
+          setSummary(null)
+          setSummaryError(fallbackErr instanceof Error ? fallbackErr.message : "Could not load savings")
+        }
+      } else {
+        setSummary(null)
+        setSummaryError(e instanceof Error ? e.message : "Could not load savings")
+      }
     } finally {
       setSummaryLoading(false)
     }
@@ -160,7 +179,13 @@ export default function HomeScreen() {
           />
         ) : null}
 
-        <SavingsSummaryPanel summary={summary} loading={summaryLoading} signedIn={!!token} />
+        <SavingsSummaryPanel
+          summary={summary}
+          loading={summaryLoading}
+          error={summaryError}
+          signedIn={!!token}
+          onRetry={loadSummary}
+        />
 
         <View style={{ flexDirection: "row", gap: theme.spacing.sm }}>
           <Pressable
