@@ -19,21 +19,53 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Configure SSH
+      - name: Validate secrets
+        run: |
+          set -euo pipefail
+          missing=0
+          if [ -z "${{ secrets.VULTR_HOST }}" ]; then
+            echo "::error::GitHub secret VULTR_HOST is not set (VPS public IP, e.g. 139.84.223.174)"
+            missing=1
+          fi
+          if [ -z "${{ secrets.VULTR_SSH_USER }}" ]; then
+            echo "::error::GitHub secret VULTR_SSH_USER is not set (e.g. root)"
+            missing=1
+          fi
+          if [ -z "${{ secrets.VULTR_SSH_PRIVATE_KEY }}" ]; then
+            echo "::error::GitHub secret VULTR_SSH_PRIVATE_KEY is not set (full PEM private key)"
+            missing=1
+          fi
+          exit "$missing"
+
+      - name: Setup SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
+
+      - name: Add Vultr host key
         env:
           VULTR_HOST: ${{ secrets.VULTR_HOST }}
-          VULTR_SSH_PRIVATE_KEY: ${{ secrets.VULTR_SSH_PRIVATE_KEY }}
         run: |
+          set -euo pipefail
           mkdir -p ~/.ssh
-          printf '%s\n' "$VULTR_SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H "$VULTR_HOST" >> ~/.ssh/known_hosts
+          chmod 700 ~/.ssh
+          for attempt in 1 2 3; do
+            if ssh-keyscan -T 15 -H "$VULTR_HOST" >> ~/.ssh/known_hosts 2>/dev/null; then
+              echo "Host key added for $VULTR_HOST"
+              exit 0
+            fi
+            echo "ssh-keyscan attempt $attempt failed, retrying..."
+            sleep 3
+          done
+          echo "::error::Could not fetch SSH host key for $VULTR_HOST (port 22 reachable from GitHub?)"
+          exit 1
 
       - name: Rsync backend
         env:
           VULTR_HOST: ${{ secrets.VULTR_HOST }}
           VULTR_SSH_USER: ${{ secrets.VULTR_SSH_USER }}
         run: |
+          set -euo pipefail
           rsync -avz --delete \
             --exclude '__pycache__' \
             --exclude '.env' \
@@ -47,6 +79,7 @@ jobs:
           VULTR_HOST: ${{ secrets.VULTR_HOST }}
           VULTR_SSH_USER: ${{ secrets.VULTR_SSH_USER }}
         run: |
+          set -euo pipefail
           rsync -avz \
             --exclude '.env' \
             -e "ssh -o StrictHostKeyChecking=yes" \

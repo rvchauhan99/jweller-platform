@@ -13,11 +13,15 @@ Pushes to **`main`** that touch `backend/**`, `deploy/vultr/**`, or `.github/wor
 
 ### GitHub Actions secrets
 
+Repository → **Settings → Secrets and variables → Actions** → **New repository secret**:
+
 | Secret | Purpose |
 |--------|---------|
-| `VULTR_HOST` | VPS public IP (e.g. `139.84.223.174`) |
+| `VULTR_HOST` | VPS public IP (e.g. `139.84.223.174`) — no `http://`, no trailing slash |
 | `VULTR_SSH_USER` | SSH user (e.g. `root`) |
-| `VULTR_SSH_PRIVATE_KEY` | PEM private key for VPS login |
+| `VULTR_SSH_PRIVATE_KEY` | Full PEM private key (`-----BEGIN … PRIVATE KEY-----` through `-----END …`) |
+
+Paste the private key exactly as in your `.pem` file (multiline). If **Validate secrets** or **Add Vultr host key** fails, check secret names match the table and port **22** is open on the VPS.
 
 Frontend / APK builds are **not** part of this workflow.
 
