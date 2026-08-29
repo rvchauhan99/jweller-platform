@@ -30,7 +30,7 @@ export default function TabLayout() {
       <Tabs.Screen
         name="collections"
         options={{
-          title: "Collections",
+          title: "Shop",
           tabBarIcon: ({ color, size }) => <Feather name="grid" size={size} color={color} />,
         }}
       />

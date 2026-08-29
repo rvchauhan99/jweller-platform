@@ -24,11 +24,12 @@ import {
 import { useStore } from "@/src/theme/StoreProvider"
 import { formatMoney } from "@/src/theme/tokens"
 import { LoadingView } from "@/src/components/StateViews"
+import { LiveRatesPanel } from "@/src/components/storefront/LiveRatesPanel"
+import { MetalFilter, MetalFilterToggle } from "@/src/components/storefront/MetalFilterToggle"
+import { SipPlanCard } from "@/src/components/storefront/SipPlanCard"
 import { useSipReminders } from "@/src/context/SipRemindersContext"
 import { useCustomerAuth } from "@/src/context/CustomerAuthContext"
 import { RazorpayCheckoutModal, RazorpayCheckoutOptions } from "@/src/payments/RazorpayCheckoutModal"
-
-type MetalFilter = "gold" | "silver"
 
 export default function SipScreen() {
   const { code, theme, businessName } = useStore()
@@ -88,7 +89,14 @@ export default function SipScreen() {
     () => enrollments.filter((e) => (e.metal || "gold") === metal),
     [enrollments, metal]
   )
-  const liveRate = rates ? (metal === "silver" ? rates.silver : rates.gold) : null
+
+  const handleEnrol = (planId: string) => {
+    if (!token) {
+      router.push(`/login?next=/sip/enroll?planId=${planId}`)
+      return
+    }
+    router.push(`/sip/enroll?planId=${planId}`)
+  }
 
   const pay = async (id: string) => {
     if (!token) {
@@ -213,48 +221,11 @@ export default function SipScreen() {
       </View>
 
       <ScrollView contentContainerStyle={{ padding: theme.spacing.lg, paddingBottom: theme.spacing["3xl"] }} showsVerticalScrollIndicator={false}>
-        <View style={{ flexDirection: "row", gap: 8, marginBottom: theme.spacing.md }}>
-          {(["gold", "silver"] as MetalFilter[]).map((m) => {
-            const on = metal === m
-            return (
-              <Pressable
-                key={m}
-                testID={`sip-metal-${m}`}
-                onPress={() => setMetal(m)}
-                style={{
-                  flex: 1,
-                  height: 40,
-                  borderRadius: theme.radius.pill,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  borderWidth: 1,
-                  borderColor: on ? theme.colors.primary : theme.colors.border,
-                  backgroundColor: on ? theme.colors.primary : theme.colors.surface,
-                }}
-                accessibilityRole="button"
-                accessibilityState={{ selected: on }}
-                accessibilityLabel={`${m} SIP`}
-              >
-                <Text style={{ fontFamily: theme.fonts.bodyMedium, color: on ? theme.colors.onPrimary || "#fff" : theme.colors.text, fontSize: 14 }}>
-                  {m === "gold" ? "Gold" : "Silver"}
-                </Text>
-              </Pressable>
-            )
-          })}
+        <View style={{ marginBottom: theme.spacing.md }}>
+          <MetalFilterToggle value={metal} onChange={setMetal} />
         </View>
 
-        {liveRate ? (
-          <View style={[styles.rateBanner, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, borderRadius: theme.radius.md }]}>
-            <Feather name="trending-up" size={14} color={theme.colors.secondary} />
-            <Text style={{ fontFamily: theme.fonts.body, color: theme.colors.muted, fontSize: theme.fontSize.sm, marginLeft: 6 }}>
-              Live {metalTitle.toLowerCase()} rate
-            </Text>
-            <View style={{ flex: 1 }} />
-            <Text style={{ fontFamily: theme.fonts.bodyMedium, color: theme.colors.secondary, fontSize: theme.fontSize.sm }}>
-              {formatMoney(liveRate.inr_per_gram)} / g{rates?.stale ? " (delayed)" : ""}
-            </Text>
-          </View>
-        ) : null}
+        {rates ? <LiveRatesPanel rates={rates} variant="compact" metal={metal} testID="sip-rate-banner" /> : null}
 
         {rates && metal === "gold" && rates.silver ? (
           <Text style={{ fontFamily: theme.fonts.body, color: theme.colors.muted, fontSize: 12, marginTop: 6 }}>
@@ -427,26 +398,7 @@ export default function SipScreen() {
           <Text style={{ fontFamily: theme.fonts.body, color: theme.colors.muted, fontSize: 14 }}>No {metalTitle.toLowerCase()} plans available yet.</Text>
         ) : (
           filteredPlans.map((p) => (
-            <View key={p.id} testID={`sip-plan-${p.id}`} style={[styles.card, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, borderRadius: theme.radius.lg }]}>
-              <Text style={{ fontFamily: theme.fonts.bodyMedium, color: theme.colors.text, fontSize: theme.fontSize.lg }}>{p.name}</Text>
-              <Text style={{ fontFamily: theme.fonts.body, color: theme.colors.secondary, fontSize: theme.fontSize.sm, marginTop: 2 }}>{p.tagline}</Text>
-              <Text style={{ fontFamily: theme.fonts.body, color: theme.colors.muted, fontSize: theme.fontSize.base, marginTop: theme.spacing.sm, lineHeight: 22 }}>
-                {p.benefit_text}
-              </Text>
-              <View style={{ flexDirection: "row", marginTop: theme.spacing.md, gap: theme.spacing.lg }}>
-                <Stat label="From" value={`${formatMoney(p.monthly_amount)}/mo`} />
-                <Stat label="Tenure" value={`${p.tenure_months} mo`} />
-                {p.bonus_months ? <Stat label="Bonus" value={`+${p.bonus_months} mo`} /> : null}
-              </View>
-              <Pressable
-                testID={`sip-enrol-${p.id}`}
-                onPress={() => router.push(`/sip/enroll?planId=${p.id}`)}
-                style={[styles.enrolBtn, { borderColor: theme.colors.primary, borderRadius: theme.radius.pill }]}
-              >
-                <Text style={{ fontFamily: theme.fonts.bodyMedium, color: theme.colors.primary, fontSize: theme.fontSize.base }}>Enrol & pay first</Text>
-                <Feather name="arrow-right" size={15} color={theme.colors.primary} />
-              </Pressable>
-            </View>
+            <SipPlanCard key={p.id} plan={p} onEnrol={handleEnrol} testID={`sip-plan-${p.id}`} />
           ))
         )}
       </ScrollView>
@@ -479,7 +431,6 @@ function Stat({ label, value }: { label: string; value: string }) {
 
 const styles = StyleSheet.create({
   header: { paddingHorizontal: 16, paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth, gap: 2 },
-  rateBanner: { flexDirection: "row", alignItems: "center", padding: 12, borderWidth: StyleSheet.hairlineWidth },
   walletRow: { padding: 12, borderWidth: StyleSheet.hairlineWidth },
   dueBanner: { flexDirection: "row", alignItems: "center", padding: 12, borderWidth: 1 },
   sectionTitle: { marginBottom: 12 },

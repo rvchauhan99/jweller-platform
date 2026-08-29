@@ -10,7 +10,12 @@
     "newArchEnabled": true,
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "app.luxejewel.aurelia"
+      "bundleIdentifier": "app.luxejewel.aurelia",
+      "infoPlist": {
+        "NSAppTransportSecurity": {
+          "NSAllowsArbitraryLoads": true
+        }
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -18,7 +23,8 @@
         "backgroundColor": "#000000"
       },
       "edgeToEdgeEnabled": true,
-      "package": "app.luxejewel.aurelia"
+      "package": "app.luxejewel.aurelia",
+      "usesCleartextTraffic": true
     },
     "web": {
       "bundler": "metro",

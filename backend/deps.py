@@ -204,7 +204,6 @@ def _rates_payload(ctx: dict) -> dict:
         "fetched_at": fetched_at,
         "stale": _is_stale(fetched_at),
         "currency": "₹",
-        "note": "International spot in INR + your shop premium",
     }
 
 
@@ -292,6 +291,49 @@ def _enrich_enrollment(e: dict, ctx: dict) -> dict:
         "current_value": round(total_grams * current_rate, 2) if current_rate else None,
     }
     return e
+
+
+async def _savings_summary(db, customer_id: str, ctx: dict) -> dict:
+    rates = _rates_payload(ctx)
+    gold_rate = float(rates["gold"]["inr_per_gram"])
+    silver_rate = float(rates["silver"]["inr_per_gram"])
+
+    wallet = await db.metal_wallets.find_one({"customer_id": customer_id}) or {}
+    wallet_gold = float(wallet.get("gold_grams") or 0)
+    wallet_silver = float(wallet.get("silver_grams") or 0)
+
+    sip_invested = 0.0
+    sip_gold_g = 0.0
+    sip_silver_g = 0.0
+    enrollments = await db.sip_enrollments.find({"customer_id": customer_id}).to_list(100)
+    for e in enrollments:
+        enriched = _enrich_enrollment(e, ctx)
+        summary = enriched.get("summary") or {}
+        sip_invested += float(summary.get("total_paid") or 0)
+        grams = float(summary.get("grams_accrued") or 0)
+        if (e.get("metal") or "gold") == "silver":
+            sip_silver_g += grams
+        else:
+            sip_gold_g += grams
+
+    onetime_invested = 0.0
+    purchases = await db.metal_purchases.find({"customer_id": customer_id, "status": "paid"}).to_list(500)
+    for p in purchases:
+        onetime_invested += float(p.get("amount_inr") or 0)
+
+    total_invested = round(sip_invested + onetime_invested, 2)
+    gold_g = round(wallet_gold + sip_gold_g, 4)
+    silver_g = round(wallet_silver + sip_silver_g, 4)
+    current_value = round(gold_g * gold_rate + silver_g * silver_rate, 2)
+    gain = round(current_value - total_invested, 2)
+
+    return {
+        "total_invested": total_invested,
+        "current_value": current_value,
+        "gain": gain,
+        "gold_grams": gold_g,
+        "silver_grams": silver_g,
+    }
 
 
 

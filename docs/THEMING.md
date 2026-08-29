@@ -79,6 +79,8 @@ Allowed `homepage_sections` values:
 
 Unknown section ids are ignored at render time.
 
+**Render targets (storefront):** `rate_ticker` and `sip_cta` → Home tab; `hero`, `categories`, `featured`, `about` → Shop tab (`collections`). See [FRONTEND.md](./FRONTEND.md).
+
 ---
 
 ## Public snapshot (Registry + Redis)

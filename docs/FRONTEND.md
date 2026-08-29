@@ -51,13 +51,19 @@ Tenant branding applies to the **customer** surface via bootstrap theme tokens. 
 - shadcn-default cards wrapping every block.
 - Hardcoded gold (`#C9A227`) or `text-blue-600`. Brand comes from [THEMING.md](./THEMING.md) tokens.
 
-**Homepage** is assembled from allowed `homepage_sections` (`hero`, `featured`, `categories`, `rate_ticker`, `about`, `sip_cta`). Unknown ids are ignored.
+**Homepage sections** use allowed `homepage_sections` (`hero`, `featured`, `categories`, `rate_ticker`, `about`, `sip_cta`). Unknown ids are ignored. Section placement:
+
+| Section | Screen |
+|---------|--------|
+| `rate_ticker`, `sip_cta` | **Home** tab — live e-rates + SIP plan preview |
+| `hero`, `categories`, `featured`, `about` | **Shop** tab (`collections`) — catalog landing |
 
 **Primary actions by screen**
 
 | Screen | What matters most | Primary action |
 |--------|-------------------|----------------|
-| Home | Brand + featured work | Browse catalog / SIP CTA |
+| Home | Live sell rates + start SIP | Enrol in plan / one-time buy |
+| Shop (collections tab) | Brand + featured work | Browse catalog |
 | Category / catalog | Pieces, not chrome | Open product |
 | Product | Image, weight, purity, making, live sell rate if commodity | Add to cart or start SIP |
 | Cart → address → pay | Total, jeweler identity, rate lock warning | Pay on tenant gateway |

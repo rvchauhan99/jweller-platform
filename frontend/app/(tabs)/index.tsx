@@ -1,61 +1,108 @@
-import React, { useCallback, useEffect, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View, useWindowDimensions } from "react-native";
-import { Image } from "expo-image";
-import { LinearGradient } from "expo-linear-gradient";
-import { useFocusEffect, useRouter } from "expo-router";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import Feather from "@expo/vector-icons/Feather";
+import React, { useCallback, useEffect, useMemo, useState } from "react"
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native"
+import { useFocusEffect, useRouter } from "expo-router"
+import { useSafeAreaInsets } from "react-native-safe-area-context"
+import Feather from "@expo/vector-icons/Feather"
 
-import { Category, getCategories, getProducts, Product } from "@/src/api/client";
-import { useStore } from "@/src/theme/StoreProvider";
-import { formatMoney } from "@/src/theme/tokens";
-import { ProductCard } from "@/src/components/ProductCard";
-import { ProductCardSkeleton } from "@/src/components/Skeleton";
-import { LoadingView, MessageView } from "@/src/components/StateViews";
-import { HeaderIcons } from "@/src/components/HeaderIcons";
-import { BrandMark } from "@/src/components/BrandMark";
-import { useSipReminders } from "@/src/context/SipRemindersContext";
+import { getRates, getSavingsSummary, getSipPlans, Rates, SavingsSummary, SipPlan } from "@/src/api/client"
+import { BrandMark } from "@/src/components/BrandMark"
+import { HeaderIcons } from "@/src/components/HeaderIcons"
+import { LoadingView, MessageView } from "@/src/components/StateViews"
+import { LiveRatesPanel } from "@/src/components/storefront/LiveRatesPanel"
+import { MetalFilter, MetalFilterToggle } from "@/src/components/storefront/MetalFilterToggle"
+import { SavingsSummaryPanel } from "@/src/components/storefront/SavingsSummaryPanel"
+import { SipPlanCard } from "@/src/components/storefront/SipPlanCard"
+import { useCustomerAuth } from "@/src/context/CustomerAuthContext"
+import { useSipReminders } from "@/src/context/SipRemindersContext"
+import { useStore } from "@/src/theme/StoreProvider"
+import { formatMoney } from "@/src/theme/tokens"
 
 export default function HomeScreen() {
-  const { code, status, theme, businessName, sections, cms, errorMessage, reload } = useStore();
-  const router = useRouter();
-  const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
+  const { code, status, theme, businessName, sections, errorMessage, reload } = useStore()
+  const router = useRouter()
+  const insets = useSafeAreaInsets()
+  const { token, ready } = useCustomerAuth()
+  const { next: dueReminder, refresh: refreshReminders } = useSipReminders()
 
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [featured, setFeatured] = useState<Product[]>([]);
-  const [dataLoading, setDataLoading] = useState(true);
-  const { next: dueReminder, refresh: refreshReminders } = useSipReminders();
-  const [reminderDismissed, setReminderDismissed] = useState(false);
+  const [rates, setRates] = useState<Rates | null>(null)
+  const [plans, setPlans] = useState<SipPlan[]>([])
+  const [summary, setSummary] = useState<SavingsSummary | null>(null)
+  const [summaryLoading, setSummaryLoading] = useState(false)
+  const [metal, setMetal] = useState<MetalFilter>("gold")
+  const [loading, setLoading] = useState(true)
+  const [reminderDismissed, setReminderDismissed] = useState(false)
+
+  const hasSection = (t: string) => sections.some((s) => s.type === t)
+  const showRates = hasSection("rate_ticker")
+  const showSip = hasSection("sip_cta")
 
   const loadData = useCallback(async () => {
-    setDataLoading(true);
+    setLoading(true)
     try {
-      const [cats, prods] = await Promise.all([
-        getCategories(code),
-        getProducts(code, { featured: true }),
-      ]);
-      setCategories(cats);
-      setFeatured(prods);
-    } catch {
-      setCategories([]);
-      setFeatured([]);
+      const [ratesRes, plansRes] = await Promise.all([
+        getRates(code).catch(() => null),
+        getSipPlans(code).catch(() => []),
+      ])
+      setRates(ratesRes)
+      setPlans(plansRes)
     } finally {
-      setDataLoading(false);
+      setLoading(false)
     }
-  }, [code]);
+  }, [code])
+
+  const loadSummary = useCallback(async () => {
+    if (!token) {
+      setSummary(null)
+      return
+    }
+    setSummaryLoading(true)
+    try {
+      setSummary(await getSavingsSummary(code))
+    } catch {
+      setSummary(null)
+    } finally {
+      setSummaryLoading(false)
+    }
+  }, [code, token])
 
   useEffect(() => {
-    if (status === "ready") loadData();
-  }, [status, loadData]);
+    if (status === "ready") loadData()
+  }, [status, loadData])
+
+  useEffect(() => {
+    if (status === "ready" && ready) loadSummary()
+  }, [status, ready, loadSummary])
 
   useFocusEffect(
     useCallback(() => {
-      refreshReminders();
-    }, [refreshReminders])
-  );
+      if (status === "ready") {
+        loadData()
+        loadSummary()
+        refreshReminders()
+      }
+    }, [status, loadData, loadSummary, refreshReminders])
+  )
 
-  if (status === "loading") return <LoadingView label="Opening store" />;
+  const filteredPlans = useMemo(() => plans.filter((p) => (p.metal || "gold") === metal), [plans, metal])
+  const metalTitle = metal === "silver" ? "Silver" : "Gold"
+
+  const handleEnrol = (planId: string) => {
+    if (!token) {
+      router.push(`/login?next=/sip/enroll?planId=${planId}`)
+      return
+    }
+    router.push(`/sip/enroll?planId=${planId}`)
+  }
+
+  const handleOneTimeBuy = (buyMetal: MetalFilter) => {
+    if (!token) {
+      router.push(`/login?next=/metal/buy?metal=${buyMetal}`)
+      return
+    }
+    router.push(`/metal/buy?metal=${buyMetal}`)
+  }
+
+  if (status === "loading") return <LoadingView label="Opening store" />
   if (status !== "ready") {
     return (
       <MessageView
@@ -66,13 +113,8 @@ export default function HomeScreen() {
         actionLabel="Retry"
         onAction={reload}
       />
-    );
+    )
   }
-
-  const hasSection = (t: string) => sections.some((s) => s.type === t);
-  const heroImage = cms?.hero_image;
-  const gap = theme.spacing.md;
-  const cardW = (width - theme.spacing.lg * 2 - gap) / 2;
 
   return (
     <ScrollView
@@ -81,207 +123,169 @@ export default function HomeScreen() {
       contentContainerStyle={{ paddingBottom: theme.spacing["3xl"] }}
       showsVerticalScrollIndicator={false}
     >
-      {/* Hero */}
-      <View style={{ height: 480 }}>
-        <Image source={{ uri: heroImage }} style={StyleSheet.absoluteFillObject} contentFit="cover" transition={400} />
-        <LinearGradient
-          colors={["rgba(0,0,0,0.15)", "rgba(0,0,0,0.05)", "rgba(0,0,0,0.75)"]}
-          style={StyleSheet.absoluteFillObject}
-        />
-        <View style={[styles.heroContent, { paddingTop: insets.top + theme.spacing.lg, paddingHorizontal: theme.spacing.lg }]}>
-          <View style={{ flexDirection: "row", alignItems: "center" }}>
-            <View testID="home-wordmark" style={{ flex: 1 }}>
-              <BrandMark onDark compact />
-            </View>
-            <HeaderIcons tint="#FFFFFF" />
+      <View
+        style={[
+          styles.header,
+          {
+            paddingTop: insets.top + theme.spacing.md,
+            paddingHorizontal: theme.spacing.lg,
+            backgroundColor: theme.colors.headerBg,
+            borderBottomColor: theme.colors.border,
+          },
+        ]}
+      >
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
+          <View testID="home-wordmark" style={{ flex: 1 }}>
+            <BrandMark compact />
           </View>
-          <View style={{ flex: 1 }} />
-          <Text
-            style={{ fontFamily: theme.fonts.headingBold, fontSize: theme.fontSize["4xl"], color: "#FFFFFF", lineHeight: theme.fontSize["4xl"] + 6 }}
-          >
-            {cms?.hero_title ?? businessName}
-          </Text>
-          {cms?.hero_subtitle ? (
-            <Text style={{ fontFamily: theme.fonts.body, fontSize: theme.fontSize.lg, color: "#FFFFFF", opacity: 0.9, marginTop: theme.spacing.sm }}>
-              {cms.hero_subtitle}
-            </Text>
-          ) : null}
-          <Pressable
-            testID="hero-explore-button"
-            onPress={() => router.push("/collections")}
-            style={[styles.heroButton, { backgroundColor: theme.colors.primary, borderRadius: theme.radius.pill, marginTop: theme.spacing.xl }]}
-          >
-            <Text style={{ fontFamily: theme.fonts.bodyMedium, color: theme.colors.onPrimary, fontSize: theme.fontSize.base }}>
-              Explore Collections
-            </Text>
-            <Feather name="arrow-right" size={16} color={theme.colors.onPrimary} />
-          </Pressable>
+          <HeaderIcons />
         </View>
+        <Text style={{ fontFamily: theme.fonts.body, fontSize: theme.fontSize.sm, letterSpacing: 2, color: theme.colors.secondary, marginTop: theme.spacing.sm }}>
+          {(businessName || "").toUpperCase()}
+        </Text>
+        <Text style={{ fontFamily: theme.fonts.heading, fontSize: theme.fontSize["3xl"], color: theme.colors.headerText, marginTop: 2 }}>
+          Today&apos;s rates & savings
+        </Text>
       </View>
 
-      {/* Rate ticker (stubbed static rate) */}
-      {hasSection("rate_ticker") && cms?.rate ? (
-        <View style={[styles.ticker, { backgroundColor: theme.colors.surface, borderBottomColor: theme.colors.border }]} testID="rate-ticker">
-          <Feather name="trending-up" size={14} color={theme.colors.secondary} />
-          <Text style={{ fontFamily: theme.fonts.body, color: theme.colors.text, fontSize: theme.fontSize.sm, marginLeft: theme.spacing.sm }}>
-            {cms.rate.metal}
-          </Text>
-          <Text style={{ fontFamily: theme.fonts.bodyMedium, color: theme.colors.secondary, fontSize: theme.fontSize.sm, marginLeft: theme.spacing.sm }}>
-            {cms.rate.value}
-          </Text>
-          <View style={{ flex: 1 }} />
-          <Text style={{ fontFamily: theme.fonts.body, color: theme.colors.muted, fontSize: theme.fontSize.sm }}>
-            {cms.rate.note}
-          </Text>
-        </View>
-      ) : null}
+      <View style={{ padding: theme.spacing.lg, gap: theme.spacing.lg }}>
+        {loading && !rates ? (
+          <LoadingView label="Loading rates" />
+        ) : showRates && rates ? (
+          <LiveRatesPanel
+            rates={rates}
+            variant="full"
+            onGoldPress={() => handleOneTimeBuy("gold")}
+            onSilverPress={() => handleOneTimeBuy("silver")}
+          />
+        ) : null}
 
-      {/* SIP due reminder nudge */}
-      {dueReminder && !reminderDismissed ? (
-        <Pressable
-          testID="sip-reminder-card"
-          onPress={() => router.push("/sip")}
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            marginHorizontal: theme.spacing.lg,
-            marginTop: theme.spacing.lg,
-            padding: theme.spacing.md,
-            borderRadius: theme.radius.lg,
-            borderWidth: 1,
-            borderColor: theme.colors.primary,
-            backgroundColor: theme.colors.surface,
-          }}
-        >
-          <View style={{ width: 36, height: 36, borderRadius: 999, backgroundColor: theme.colors.primary, alignItems: "center", justifyContent: "center" }}>
-            <Feather name="bell" size={16} color={theme.colors.onPrimary} />
-          </View>
-          <View style={{ flex: 1, marginLeft: theme.spacing.md }}>
-            <Text style={{ fontFamily: theme.fonts.bodyMedium, color: theme.colors.text, fontSize: theme.fontSize.base }}>
-              Installment due
-            </Text>
-            <Text style={{ fontFamily: theme.fonts.body, color: theme.colors.muted, fontSize: theme.fontSize.sm, marginTop: 1 }}>
-              {dueReminder.plan_name} · {formatMoney(dueReminder.amount)} — tap to pay
-            </Text>
-          </View>
-          <Pressable testID="sip-reminder-dismiss" onPress={() => setReminderDismissed(true)} hitSlop={10} style={{ padding: 4 }}>
-            <Feather name="x" size={18} color={theme.colors.muted} />
-          </Pressable>
-        </Pressable>
-      ) : null}
+        <SavingsSummaryPanel summary={summary} loading={summaryLoading} signedIn={!!token} />
 
-      {/* Categories */}
-      {hasSection("categories") ? (
-        <View style={{ marginTop: theme.spacing["2xl"] }}>
-          <SectionTitle title="Collections" />
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ paddingHorizontal: theme.spacing.lg, gap: theme.spacing.md }}
+        <View style={{ flexDirection: "row", gap: theme.spacing.sm }}>
+          <Pressable
+            testID="home-start-sip"
+            onPress={() => router.push("/sip")}
+            style={[styles.primaryAction, { flex: 1, backgroundColor: theme.colors.primary, borderRadius: theme.radius.pill }]}
+            accessibilityRole="button"
+            accessibilityLabel="Start SIP"
           >
-            {(dataLoading ? [] : categories).map((c) => (
-              <Pressable
-                key={c.id}
-                testID={`home-category-${c.slug}`}
-                onPress={() => router.push(`/category/${c.slug}`)}
-                style={{ width: 130 }}
-              >
-                <Image
-                  source={{ uri: c.image }}
-                  style={{ width: 130, height: 160, borderRadius: theme.radius.lg, backgroundColor: theme.colors.surface }}
-                  contentFit="cover"
-                  transition={300}
+            <Feather name="trending-up" size={16} color={theme.colors.onPrimary} />
+            <Text style={{ fontFamily: theme.fonts.bodyMedium, color: theme.colors.onPrimary, fontSize: theme.fontSize.sm }}>
+              Start SIP
+            </Text>
+          </Pressable>
+          <Pressable
+            testID="home-onetime-buy"
+            onPress={() => handleOneTimeBuy(metal)}
+            style={[styles.primaryAction, { flex: 1, borderColor: theme.colors.primary, borderRadius: theme.radius.pill, borderWidth: 1 }]}
+            accessibilityRole="button"
+            accessibilityLabel="One-time metal purchase"
+          >
+            <Feather name="shopping-bag" size={16} color={theme.colors.primary} />
+            <Text style={{ fontFamily: theme.fonts.bodyMedium, color: theme.colors.primary, fontSize: theme.fontSize.sm }}>
+              One-time buy
+            </Text>
+          </Pressable>
+        </View>
+
+        {dueReminder && !reminderDismissed ? (
+          <Pressable
+            testID="sip-reminder-card"
+            onPress={() => router.push("/sip")}
+            style={{
+              flexDirection: "row",
+              alignItems: "center",
+              padding: theme.spacing.md,
+              borderRadius: theme.radius.lg,
+              borderWidth: 1,
+              borderColor: theme.colors.primary,
+              backgroundColor: theme.colors.surface,
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Pay due SIP installment"
+          >
+            <View style={{ width: 36, height: 36, borderRadius: 999, backgroundColor: theme.colors.primary, alignItems: "center", justifyContent: "center" }}>
+              <Feather name="bell" size={16} color={theme.colors.onPrimary} />
+            </View>
+            <View style={{ flex: 1, marginLeft: theme.spacing.md }}>
+              <Text style={{ fontFamily: theme.fonts.bodyMedium, color: theme.colors.text, fontSize: theme.fontSize.base }}>
+                Installment due
+              </Text>
+              <Text style={{ fontFamily: theme.fonts.body, color: theme.colors.muted, fontSize: theme.fontSize.sm, marginTop: 1 }}>
+                {dueReminder.plan_name} · {formatMoney(dueReminder.amount)} — tap to pay
+              </Text>
+            </View>
+            <Pressable testID="sip-reminder-dismiss" onPress={() => setReminderDismissed(true)} hitSlop={10} style={{ padding: 4 }}>
+              <Feather name="x" size={18} color={theme.colors.muted} />
+            </Pressable>
+          </Pressable>
+        ) : null}
+
+        {showSip ? (
+          <>
+            <View>
+              <Text style={{ fontFamily: theme.fonts.heading, fontSize: theme.fontSize["2xl"], color: theme.colors.text, marginBottom: theme.spacing.md }}>
+                Metal SIP plans
+              </Text>
+              <MetalFilterToggle value={metal} onChange={setMetal} />
+            </View>
+
+            {filteredPlans.length === 0 ? (
+              <Text style={{ fontFamily: theme.fonts.body, color: theme.colors.muted, fontSize: 14 }}>
+                No {metalTitle.toLowerCase()} plans available yet.
+              </Text>
+            ) : (
+              filteredPlans.map((p) => (
+                <SipPlanCard
+                  key={p.id}
+                  plan={p}
+                  onEnrol={handleEnrol}
+                  testID={`sip-plan-preview-${p.id}`}
+                  compact
                 />
-                <Text style={{ fontFamily: theme.fonts.body, color: theme.colors.text, fontSize: theme.fontSize.base, marginTop: theme.spacing.sm }}>
-                  {c.name}
-                </Text>
-              </Pressable>
-            ))}
-          </ScrollView>
-        </View>
-      ) : null}
+              ))
+            )}
 
-      {/* Featured products */}
-      {hasSection("featured") ? (
-        <View style={{ marginTop: theme.spacing["2xl"], paddingHorizontal: theme.spacing.lg }}>
-          <SectionTitle title="Featured Pieces" inset={0} />
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap, marginTop: theme.spacing.md }}>
-            {dataLoading
-              ? [0, 1, 2, 3].map((i) => (
-                  <View key={i} style={{ width: cardW }}>
-                    <ProductCardSkeleton />
-                  </View>
-                ))
-              : featured.map((p) => (
-                  <View key={p.id} style={{ width: cardW }}>
-                    <ProductCard product={p} />
-                  </View>
-                ))}
-          </View>
-        </View>
-      ) : null}
+            <Pressable
+              testID="home-view-all-plans"
+              onPress={() => router.push("/sip")}
+              style={{ flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start" }}
+              accessibilityRole="button"
+              accessibilityLabel="View all SIP plans"
+            >
+              <Text style={{ fontFamily: theme.fonts.bodyMedium, color: theme.colors.primary, fontSize: theme.fontSize.base }}>
+                View all plans
+              </Text>
+              <Feather name="arrow-right" size={16} color={theme.colors.primary} />
+            </Pressable>
+          </>
+        ) : null}
 
-      {/* About */}
-      {hasSection("about") && cms?.about_text ? (
-        <View style={{ marginTop: theme.spacing["3xl"], paddingHorizontal: theme.spacing.lg }}>
-          <Text style={{ fontFamily: theme.fonts.body, fontSize: theme.fontSize.sm, letterSpacing: 2, color: theme.colors.secondary }}>
-            {(cms.about_title ?? "About").toUpperCase()}
+        <Pressable
+          testID="home-shop-collections"
+          onPress={() => router.push("/collections")}
+          style={{ flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", marginTop: theme.spacing.xs }}
+          accessibilityRole="button"
+          accessibilityLabel="Shop jewellery collections"
+        >
+          <Text style={{ fontFamily: theme.fonts.body, color: theme.colors.muted, fontSize: theme.fontSize.sm }}>
+            Browse jewellery
           </Text>
-          <Text style={{ fontFamily: theme.fonts.heading, fontSize: theme.fontSize["2xl"], color: theme.colors.text, marginTop: theme.spacing.sm, lineHeight: 30 }}>
-            {businessName}
-          </Text>
-          <Text style={{ fontFamily: theme.fonts.body, fontSize: theme.fontSize.base, color: theme.colors.muted, marginTop: theme.spacing.md, lineHeight: 24 }}>
-            {cms.about_text}
-          </Text>
-        </View>
-      ) : null}
-
-      {/* Footer */}
-      <View style={[styles.footer, { backgroundColor: theme.colors.footerBg, marginTop: theme.spacing["3xl"] }]}>
-        <Text style={{ fontFamily: theme.fonts.heading, fontSize: theme.fontSize.xl, color: theme.colors.footerText }}>
-          {businessName}
-        </Text>
-        <Text style={{ fontFamily: theme.fonts.body, fontSize: theme.fontSize.sm, color: theme.colors.footerText, opacity: 0.7, marginTop: theme.spacing.xs }}>
-          Handcrafted · Hallmarked · Since 1974
-        </Text>
+          <Feather name="arrow-right" size={14} color={theme.colors.muted} />
+        </Pressable>
       </View>
     </ScrollView>
-  );
-}
-
-function SectionTitle({ title, inset }: { title: string; inset?: number }) {
-  const { theme } = useStore();
-  return (
-    <Text
-      style={{
-        fontFamily: theme.fonts.heading,
-        fontSize: theme.fontSize["2xl"],
-        color: theme.colors.text,
-        paddingHorizontal: inset ?? theme.spacing.lg,
-        marginBottom: theme.spacing.md,
-      }}
-    >
-      {title}
-    </Text>
-  );
+  )
 }
 
 const styles = StyleSheet.create({
-  heroContent: { flex: 1, paddingBottom: 28 },
-  heroButton: {
+  header: { paddingBottom: 12, borderBottomWidth: StyleSheet.hairlineWidth },
+  primaryAction: {
     flexDirection: "row",
     alignItems: "center",
+    justifyContent: "center",
     gap: 8,
-    alignSelf: "flex-start",
-    paddingHorizontal: 22,
-    paddingVertical: 13,
+    height: 46,
   },
-  ticker: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  footer: { paddingVertical: 40, paddingHorizontal: 24, alignItems: "center" },
-});
+})

@@ -140,8 +140,9 @@ NOIR_THEME = {
 }
 
 SECTIONS = [
-    {"type": "hero"},
     {"type": "rate_ticker"},
+    {"type": "sip_cta"},
+    {"type": "hero"},
     {"type": "categories"},
     {"type": "featured"},
     {"type": "about"},

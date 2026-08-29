@@ -1,0 +1,17 @@
+# Demo / test stack for Vultr VPS (not production).
+# API only — MongoDB is Atlas (MONGO_URL in .env).
+
+services:
+  api:
+    build:
+      # On VPS: /opt/jweller/{backend,deploy}
+      context: ../backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      PORT: "8080"
+    ports:
+      - "80:8080"
+    mem_limit: 512m

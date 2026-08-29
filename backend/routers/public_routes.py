@@ -33,6 +33,7 @@ from deps import (
     _mark_order_paid,
     _tenant_gateway,
     _rate_for_metal,
+    _savings_summary,
 )
 
 router = APIRouter(tags=["public"])
@@ -699,6 +700,11 @@ async def metal_wallet(cctx=Depends(get_customer_ctx)):
         "silver_grams": float(w.get("silver_grams") or 0),
         "updated_at": w.get("updated_at"),
     }
+
+
+@router.get("/public/savings/summary")
+async def savings_summary(cctx=Depends(get_customer_ctx)):
+    return await _savings_summary(cctx["db"], cctx["customer_id"], cctx)
 
 
 @router.post("/public/metal/buy")

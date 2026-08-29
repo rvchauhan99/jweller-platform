@@ -39,6 +39,7 @@ class TestRates:
         assert d.get("rate_city") == "Hyderabad"
         assert isinstance(d["stale"], bool)
         assert d["stale"] is False  # freshly polled at startup
+        assert "note" not in d
         # sell = base × (1+%) + absolute ₹/g (Hyderabad-oriented silver board)
         expected_sil = round(
             d["silver"]["base_inr_per_gram"] * 1.09 + 33.5, 2
@@ -378,3 +379,81 @@ class TestTenantIsolationNew:
             f"{BASE_URL}/api/public/rates", headers=_h("admin.luxejewel.app"), timeout=15
         )
         assert r.status_code == 404
+
+
+class TestSavingsSummary:
+    def _login(self, phone=None):
+        phone = phone or f"9{uuid.uuid4().int % 10**9:09d}"
+        h = _h(AURELIA_HOST)
+        assert requests.post(f"{BASE_URL}/api/public/auth/otp/request", headers=h, json={"phone": phone}, timeout=15).status_code == 200
+        code = os.environ.get("OTP_DEV_CODE", "123456")
+        r = requests.post(
+            f"{BASE_URL}/api/public/auth/otp/verify",
+            headers=h,
+            json={"phone": phone, "code": code},
+            timeout=15,
+        )
+        assert r.status_code == 200, r.text
+        return r.json()["access_token"], phone
+
+    def _ah(self, token):
+        return {**_h(AURELIA_HOST), "Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+
+    def test_summary_requires_auth(self):
+        r = requests.get(f"{BASE_URL}/api/public/savings/summary", headers=_h(AURELIA_HOST), timeout=15)
+        assert r.status_code == 401
+
+    def test_summary_sip_and_onetime_totals(self):
+        token, phone = self._login()
+        h = self._ah(token)
+        empty = requests.get(f"{BASE_URL}/api/public/savings/summary", headers=h, timeout=15)
+        assert empty.status_code == 200, empty.text
+        assert empty.json()["total_invested"] == 0
+
+        buy = requests.post(
+            f"{BASE_URL}/api/public/metal/buy",
+            headers=h,
+            json={"metal": "gold", "amount_inr": 2000},
+            timeout=15,
+        )
+        assert buy.status_code == 200, buy.text
+        purchase_id = buy.json()["purchase_id"]
+        conf = requests.post(
+            f"{BASE_URL}/api/public/metal/buy/dev-confirm",
+            headers=h,
+            json={"purchase_id": purchase_id},
+            timeout=15,
+        )
+        assert conf.status_code == 200, conf.text
+        wallet_g = conf.json()["wallet"]["gold_grams"]
+
+        e = requests.post(
+            f"{BASE_URL}/api/public/sip/enroll",
+            headers=h,
+            json={"plan_id": "gold-11-1", "name": "Summary Test", "phone": phone, "preferred_day": 10},
+            timeout=15,
+        ).json()
+        assert requests.post(
+            f"{BASE_URL}/api/public/sip/enrollments/{e['id']}/pay",
+            headers=h,
+            json={},
+            timeout=15,
+        ).status_code == 200
+        pay_conf = requests.post(
+            f"{BASE_URL}/api/public/sip/enrollments/{e['id']}/pay/dev-confirm",
+            headers=h,
+            json={},
+            timeout=15,
+        )
+        assert pay_conf.status_code == 200, pay_conf.text
+        paid_enrollment = pay_conf.json()
+        sip_paid = paid_enrollment["summary"]["total_paid"]
+        sip_grams = paid_enrollment["summary"]["grams_accrued"]
+
+        summary = requests.get(f"{BASE_URL}/api/public/savings/summary", headers=h, timeout=15)
+        assert summary.status_code == 200, summary.text
+        body = summary.json()
+        assert body["total_invested"] == pytest.approx(2000 + sip_paid, abs=0.02)
+        assert body["gold_grams"] == pytest.approx(wallet_g + sip_grams, abs=0.0001)
+        assert body["current_value"] >= body["total_invested"] * 0.5
+        assert "gain" in body

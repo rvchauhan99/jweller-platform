@@ -149,6 +149,16 @@ export interface Rates {
 }
 export const getRates = (code: string) => apiGet<Rates>("/public/rates", code);
 
+export interface SavingsSummary {
+  total_invested: number;
+  current_value: number;
+  gain: number;
+  gold_grams: number;
+  silver_grams: number;
+}
+export const getSavingsSummary = (code: string) =>
+  apiGet<SavingsSummary>("/public/savings/summary", code, { auth: true });
+
 export interface SipPlan {
   id: string;
   name: string;

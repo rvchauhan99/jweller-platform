@@ -69,7 +69,8 @@ Legend: **Done** · **Partial** · **Not started**
 
 ### Storefront (Expo)
 - Bootstrap + theme tokens (no hardcoded brand colors on the UI path)
-- Home: hero, rate ticker, categories, featured, about
+- Home: **live e-rates** (gold /10g, silver /kg) + **savings summary** (`GET /public/savings/summary`) + SIP preview; Start SIP / one-time buy CTAs
+- Shop tab (`collections`): hero, categories, featured, about (former catalog home)
 - Collections, **search**, category filters, product detail (multi-image)
 - Account: profile edit / sign out / orders shortcut
 - Loading / empty / error / unavailable states

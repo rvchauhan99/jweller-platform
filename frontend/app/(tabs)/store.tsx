@@ -1,37 +1,31 @@
-import React, { useCallback, useState } from "react";
+import React, { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Feather from "@expo/vector-icons/Feather";
 
-import { getRates, Rates } from "@/src/api/client";
 import { useStore } from "@/src/theme/StoreProvider";
-import { formatMoney } from "@/src/theme/tokens";
 import { useWishlist } from "@/src/context/WishlistContext";
 import { useCustomerAuth } from "@/src/context/CustomerAuthContext";
 
 export default function AccountScreen() {
-  const { code, theme, businessName, tagline, cms } = useStore();
+  const { theme, businessName, tagline, cms } = useStore();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { count: wishCount } = useWishlist();
   const { ready, token, customer, updateProfile, logout } = useCustomerAuth();
-  const [rates, setRates] = useState<Rates | null>(null);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const [saveErr, setSaveErr] = useState<string | null>(null);
 
-  useFocusEffect(
-    useCallback(() => {
-      getRates(code).then(setRates).catch(() => setRates(null));
-      if (customer) {
-        setName(customer.name || "");
-        setEmail(customer.email || "");
-      }
-    }, [code, customer])
-  );
+  React.useEffect(() => {
+    if (customer) {
+      setName(customer.name || "");
+      setEmail(customer.email || "");
+    }
+  }, [customer]);
 
   const handleSaveProfile = async () => {
     setSaving(true);
@@ -128,25 +122,8 @@ export default function AccountScreen() {
           </Pressable>
         ) : null}
 
-        {rates ? (
-          <View style={[styles.rateCard, { backgroundColor: theme.colors.surface, borderColor: theme.colors.border, borderRadius: theme.radius.lg }]} testID="account-rate-card">
-            <Text style={{ fontFamily: theme.fonts.body, fontSize: theme.fontSize.sm, letterSpacing: 2, color: theme.colors.secondary }}>
-              TODAY&apos;S RATE{rates.stale ? " · DELAYED" : ""}
-            </Text>
-            <View style={{ flexDirection: "row", marginTop: theme.spacing.md, gap: theme.spacing["2xl"] }}>
-              <View>
-                <Text style={{ fontFamily: theme.fonts.body, color: theme.colors.muted, fontSize: theme.fontSize.sm }}>Gold / g</Text>
-                <Text style={{ fontFamily: theme.fonts.headingBold, color: theme.colors.secondary, fontSize: theme.fontSize["2xl"] }}>{formatMoney(rates.gold.inr_per_gram)}</Text>
-              </View>
-              <View>
-                <Text style={{ fontFamily: theme.fonts.body, color: theme.colors.muted, fontSize: theme.fontSize.sm }}>Silver / g</Text>
-                <Text style={{ fontFamily: theme.fonts.headingBold, color: theme.colors.text, fontSize: theme.fontSize["2xl"] }}>{formatMoney(rates.silver.inr_per_gram)}</Text>
-              </View>
-            </View>
-          </View>
-        ) : null}
-
         <View style={{ marginTop: theme.spacing.xl, gap: theme.spacing.sm }}>
+          <LinkRow icon="trending-up" label="Today's rates" onPress={() => router.push("/")} />
           <LinkRow icon="clipboard" label="My orders" onPress={() => router.push("/orders")} />
           <LinkRow icon="heart" label="Wishlist" badge={wishCount} onPress={() => router.push("/wishlist")} />
           <LinkRow icon="shopping-bag" label="Your bag" onPress={() => router.push("/cart")} />

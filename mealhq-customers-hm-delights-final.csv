@@ -1,0 +1,30 @@
+name,phone,email,address,apartment,city,province,postal_code,monthly_plan,lunch_qty,dinner_qty,driver_name,joining_date,payment_collection_day,last_collection_status,notes,meal_type
+PARHAR,5879171300,albertaledlights@gmail.com,1935 27 AVE NE,7,CALGARY,AB,T2E7E4,Mon-Fri,1,0,Himanshu Passi,2026-08-05,4,pending,Alberta LED Lights — inside the business,12 oz 8 chapati VEG
+ANIRUDH,5875765556,anirudhcalgary@gmail.com,128 RUNDLERIDGE WAY NE,,CALGARY,AB,T1Y2J9,MON-SAT,1,0,Himanshu Passi,2026-08-02,1,collected,Front door,8 oz 6 chapati VEG
+VIVEK RUNDLE,5879733720,vivek.kashyap36@gmail.com,15 RUNDLEMERE PLACE NE,,CALGARY,AB,T1Y3K4,MON-SAT,1,0,Himanshu Passi,2026-08-12,11,collected,Front door,12 oz 8 chapati VEG
+RAHUL SHARMA,8255582988,kaushik.19491950@gmail.com,4131 44 AVE NE,,CALGARY,AB,T1Y6B4,MON-SAT,1,0,Himanshu Passi,2026-08-02,1,collected,basement,regular
+TARAN WHITEHORN,7805621855,tkang0855@gmail.com,88 TEMPLEMONT CIRCLE,,CALGARY,AB,T1Y5A9,MON-SAT,1,0,Himanshu Passi,2026-08-12,11,pending,Front door,12 oz 8 chapati NV
+JAIJEET SINGH,4037073478,,531 WHITEHORN WAY,,CALGARY,AB,T1Y1Y2,MON-SAT,1,0,Himanshu Passi,2026-08-14,13,pending,Front door,12 oz 8 chapati VEG
+HARPREET RAY,4034830732,harpreet.singh8814@yahoo.ca,64 DEL RAY CRESCENT NE,,CALGARY,AB,T1Y6V9,MON-SAT,1,0,Himanshu Passi,2026-08-12,11,collected,basement,8 oz 4 chapati plus rice VEG
+MITALI,4036150064,mitaliarora697@gmail.com,52 LA VALENCIA GARDENS,,CALGARY,AB,T1Y6P4,MON-SAT,1,0,Himanshu Passi,2026-08-13,12,collected,Front door,8 oz 4 chapati plus rice VEG
+PARGAT TIFFIN,5874384071,pargats2002@outlook.com,903 ABBOTSFORD DRIVE,,CALGARY,AB,T2A5Y3,MON-SAT,1,0,Himanshu Passi,2026-08-03,2,collected,Front door,12 oz 8 chapati VEG
+BHUVAN,4034086703,bhuvanbhatti59@gmail.com,19 MARGATE PLACE NE,,CALGARY,AB,T2A3E4,MON-SAT,1,0,Himanshu Passi,2026-07-31,31,collected,basement,8 oz 4 chapati plus rice NV
+KIMMI,5483983558,kimmichutani@ymail.com,1210 27 STREET SE,,CALGARY,AB,T2A0E8,MON-SAT,1,0,Himanshu Passi,2026-08-16,15,pending,Front door,8 oz 6 chapati VEG
+AHMED,5879731091,husain96@gmail.com,1317 27 ST SE,3110,CALGARY,AB,T2A4Y5,MON-SAT,1,0,Himanshu Passi,2026-07-31,30,collected,"At the sofa, back door",8 oz 4 chapati plus rice VEG
+LOVEKUSH,4372395581,saharanlovekush99@gmail.com,906 37 ST SE,,CALGARY,AB,T2A1E1,MON-SAT,1,0,Himanshu Passi,2026-08-15,14,collected,Front door,12 oz 8 chapati VEG
+KESHAV,3689996555,kavyatrehan762005@gmail.com,2444 28 ST SE,,CALGARY,AB,T3P1V1,MON-SAT,1,0,Himanshu Passi,2026-07-31,30,pending,basement,12 oz 8 chapati VEG
+SACHIN,4039570936,hnazar1@hotmail.com,1512 RADDISON DR,,CALGARY,AB,T2A1Z4,MON-SAT,1,0,Himanshu Passi,2026-08-05,4,pending,"basement, code 819913",16 oz 15 chapati VEG
+GURU,5879687499,jaxacctg@gmail.com,5090 26 AVE SE,,CALGARY,AB,T2B2Y9,MON-SAT,1,0,Himanshu Passi,2026-07-29,28,collected,inside the business,16 oz 10 chapati VEG
+HARMAN,6474485124,singhherman8564@gmail.com,4055 78 AVE SE,,CALGARY,AB,T2C1E8,MON-SAT,1,0,Himanshu Passi,2026-08-12,11,collected,"Front door, near stairs",12 oz 8 chapati VEG
+SAMAR,4165718384,roohisharma0512@gmail.com,6635 106 AVE SE,,CALGARY,AB,T2C5X1,MON-SAT,1,0,Himanshu Passi,2026-08-20,19,collected,near recruitment office,8 oz 6 chapati VEG
+PRANAV,2269619521,pranavkhot1103@gmail.com,7005 FAIRMOUNT DR SE,,CALGARY,AB,T2H0J1,MON-SAT,1,0,Himanshu Passi,2026-08-04,3,collected,inside the business,8 oz 6 chapati VEG
+JIMMY,4375533712,gauswamijimytarun@gmail.com,8948 ELBOW DR SW,358,CALGARY,AB,T2V0H9,MON-SAT,1,0,Himanshu Passi,2026-08-10,9,collected,"buzz 358, building C",8 oz 4 chapati plus rice VEG
+JALDIP,5483980406,jaldipmataliya@gmail.com,612 67 AVE SW,,CALGARY,AB,T2V4Z1,MON-SAT,1,0,Himanshu Passi,2026-08-17,16,pending,"buzz 642, parcel room #7918",8 oz 4 chapati plus rice VEG
+AKASH CHINOOK,3688364531,aakashgadhari94@gmail.com,612 67 AVE SW,,CALGARY,AB,T2V4Z1,MON-SAT,1,0,Himanshu Passi,2026-08-20,19,pending,"buzz 642, parcel room #7918",12 oz 10 chapati VEG
+LOVISH,8324389202,,2139 KENSINGTON ROAD NW,,CALGARY,AB,T2N3R8,MON-SAT,1,0,Himanshu Passi,2026-08-09,8,collected,inside the business,8 oz 6 chapati VEG
+KAMAL,4379331785,kamalnuber@gmail.com,1409 EDMONTON TRAIL,,CALGARY,AB,T2E3K8,MON-SAT,1,0,Himanshu Passi,2026-08-09,8,collected,inside the business,8 oz 6 chapati VEG
+SHIVA,8252884956,shivaprasad788@gmail.com,527 33 AVE NE,,CALGARY,AB,T2E2J2,MON-SAT,1,0,Himanshu Passi,2026-07-31,30,collected,basement,12 oz 8 chapati NV
+SUJAL,8257345557,sujalvyas9434@gmail.com,2616 EDMONTON TRAIL,,CALGARY,AB,T2E3N3,MON-SAT,1,0,Himanshu Passi,2026-08-07,6,pending,Front door,8 oz 4 chapati plus rice VEG
+GURI,5873377131,wisewaysielts@gmail.com,312 GREENFIELD RD NE,,CALGARY,AB,T2E5R8,MON-SAT,1,0,Himanshu Passi,2026-07-31,30,collected,front door,8 oz 6 chapati VEG
+JAYVEER SINGH,4039188101,jaisinghyps21@gmail.com,4448 3 ST NE,,CALGARY,AB,T2E3L6,MON-SAT,1,0,Himanshu Passi,2026-08-07,6,collected,basement,8 oz 6 chapati NV
+MAHAJAN,4169853134,mahajanabhishek101@gmail.com,103 42 AVE NE,,CALGARY,AB,T2E2N5,MON-SAT,1,0,Himanshu Passi,2026-08-22,21,pending,basement,8 oz 6 chapati VEG
