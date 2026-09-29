@@ -1,8 +1,9 @@
-# Demo / test stack for Vultr VPS (not production).
+# Jweller API on the AIC Cloud VPS. Public port 80. Caddy keeps 443.
 # API only — MongoDB is Atlas (MONGO_URL in .env).
 
 services:
   api:
+    container_name: jweller-api
     build:
       # On VPS: /opt/jweller/{backend,deploy}
       context: ../backend

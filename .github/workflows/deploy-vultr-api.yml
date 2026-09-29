@@ -24,7 +24,7 @@ jobs:
           set -euo pipefail
           missing=0
           if [ -z "${{ secrets.VULTR_HOST }}" ]; then
-            echo "::error::GitHub secret VULTR_HOST is not set (VPS public IP, e.g. 139.84.223.174)"
+            echo "::error::GitHub secret VULTR_HOST is not set (VPS public IP 178.92.120.191)"
             missing=1
           fi
           if [ -z "${{ secrets.VULTR_SSH_USER }}" ]; then
